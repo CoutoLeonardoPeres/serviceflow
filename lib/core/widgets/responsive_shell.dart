@@ -36,7 +36,13 @@ const _destinations = [
     selectedIcon: Icons.dashboard,
     label: 'Início',
   ),
-  // Novas entradas adicionadas nas entregas 3–8
+  _NavDestination(
+    route: AppRoutes.customers,
+    icon: Icons.people_outline,
+    selectedIcon: Icons.people,
+    label: 'Clientes',
+  ),
+  // Novas entradas adicionadas nas entregas 4–8
 ];
 
 /// Shell responsivo: NavigationRail no desktop, NavigationBar no mobile.

@@ -50,8 +50,27 @@ Suporte via fluxo break-glass: concessão temporária, escopada e auditada. Impl
 ## ADR-016 — Estoque fora do MVP; materiais da OS sem baixa
 `work_order_materials` registra consumo sem estoque na F1. Na F3, consumo passa a gerar `stock_movements`; migração de dados prevista (expand-and-contract).
 
+## ADR-017 — Tipo monetário em Dart: int em centavos (sem lib externa no MVP)
+Contexto: ADR-008 mandatou NUMERIC no banco; a camada Dart precisa de representação segura.
+Alternativas: lib `decimal`, `int` em centavos, `BigInt`, `Decimal` do package `decimal`.
+**Decisão:** usar `int` (centavos) nas entidades de domínio e na camada de dados; formatação em
+`NumberFormat.currency(locale:'pt_BR', symbol:'R\$')` do pacote `intl` (já em pubspec).
+Não adicionar lib `decimal` até que seja comprovado que operações de divisão intermediária
+no Flutter causem problema (avaliação na E6 — quotations).
+**Consequências:** sem dependência extra; divisões de percentual tratadas com arredondamento
+explícito (`(centavos * pct / 100).round()`); UI sempre formata a partir de int; servidor
+é a fonte da verdade para todos os cálculos (ADR-003).
+
+## ADR-018 — Testes de RLS: arquivos SQL + Supabase CLI local
+Contexto: precisamos verificar isolamento entre tenants de forma automatizada sem expor banco de produção.
+**Decisão:** manter arquivos `.sql` em `test/isolation/` com instruções `SET LOCAL role` e
+`SET LOCAL request.jwt.claims`. Execução via `psql` contra instância Supabase CLI local
+(`supabase start` → `supabase db reset` → executar scripts). CI usa `supabase/config.toml`
+para subir stack local antes dos testes SQL. Testes Flutter (mockito) para camada de dados;
+isolamento real somente via SQL local.
+**Consequências:** cada entrega adiciona um arquivo `<n>_rls_<módulo>_test.sql`; exige
+Docker na pipeline de CI; setup documentado em `docs/CI_SETUP.md` (a criar na E8).
+
 ## A registrar nas próximas entregas
-- ADR-017: lib decimal/money em Dart (E2).
-- ADR-018: estratégia de Supabase local vs projeto dev para testes de RLS no CI (E2).
 - ADR-019: motor de PDF (lib Dart em Edge/Deno vs serviço) (E6).
 - ADR-020: política de custo de estoque — custo médio vs última compra (F3).

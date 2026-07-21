@@ -7,6 +7,10 @@ import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/reset_password_screen.dart';
 import '../../features/tenant/presentation/create_tenant_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/customers/domain/customer.dart';
+import '../../features/customers/presentation/customer_list_screen.dart';
+import '../../features/customers/presentation/customer_detail_screen.dart';
+import '../../features/customers/presentation/customer_form_screen.dart';
 import '../../core/widgets/app_loading.dart';
 import '../../core/widgets/responsive_shell.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -14,12 +18,18 @@ import '../../shared/providers/tenant_provider.dart';
 
 // ── Rotas ──────────────────────────────────────────────────────────────────────
 abstract class AppRoutes {
-  static const splash        = '/';
-  static const login         = '/login';
+  static const splash         = '/';
+  static const login          = '/login';
   static const forgotPassword = '/esqueci-senha';
-  static const resetPassword = '/redefinir-senha';
-  static const createTenant  = '/criar-empresa';
-  static const dashboard     = '/dashboard';
+  static const resetPassword  = '/redefinir-senha';
+  static const createTenant   = '/criar-empresa';
+  static const dashboard      = '/dashboard';
+
+  // Clientes (E3)
+  static const customers      = '/clientes';
+  static const customerNew    = '/clientes/novo';
+  static String customerDetail(String id) => '/clientes/$id';
+  static String customerEdit(String id)   => '/clientes/$id/editar';
 }
 
 // ── Provider do router ────────────────────────────────────────────────────────
@@ -93,7 +103,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.dashboard,
             builder: (_, __) => const DashboardScreen(),
           ),
-          // Novas rotas serão adicionadas aqui nas entregas 3–8
+
+          // ── Clientes (E3) ────────────────────────────────────────────
+          GoRoute(
+            path: AppRoutes.customers,
+            builder: (_, __) => const CustomerListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.customerNew,
+            builder: (_, __) => const CustomerFormScreen(),
+          ),
+          GoRoute(
+            path: '/clientes/:id',
+            builder: (_, state) => CustomerDetailScreen(
+              customerId: state.pathParameters['id']!,
+            ),
+          ),
+          GoRoute(
+            path: '/clientes/:id/editar',
+            builder: (context, state) {
+              final id = state.pathParameters['id']!;
+              // Customer passado via extra (de CustomerDetailScreen.handleAction)
+              final extra = state.extra;
+              if (extra is Customer) {
+                return CustomerFormScreen(customer: extra);
+              }
+              // Fallback sem extra: tela de detalhe navega de volta
+              return CustomerDetailScreen(customerId: id);
+            },
+          ),
         ],
       ),
     ],
