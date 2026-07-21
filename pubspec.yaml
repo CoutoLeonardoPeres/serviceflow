@@ -1,0 +1,55 @@
+name: serviceflow
+description: SaaS de gestão de atendimento e serviços técnicos em campo.
+
+publish_to: "none"
+
+version: 0.2.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Backend
+  supabase_flutter: ^2.8.0
+
+  # Estado — somente Riverpod
+  flutter_riverpod: ^2.5.1
+
+  # Navegação
+  go_router: ^14.0.0
+
+  # Modelos imutáveis
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.9.0
+
+  # Utilitários
+  equatable: ^2.0.5
+  intl: ^0.20.0
+
+  # UI
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^3.0.2
+
+  # Code generation
+  build_runner: ^2.4.9
+  freezed: ^2.5.2
+  json_serializable: ^6.8.0
+
+  # Testes
+  mockito: ^5.4.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/

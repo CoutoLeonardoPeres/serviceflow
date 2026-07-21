@@ -1,0 +1,55 @@
+# ── Segredos e variáveis de ambiente ──────────────────────────────────────────
+.env
+.env.*
+!.env.example
+dart_defines/*.json
+!dart_defines/*.example.json
+
+# ── Miscellaneous ──────────────────────────────────────────────────────────────
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# ── IntelliJ / IDEs ───────────────────────────────────────────────────────────
+*.iml
+*.ipr
+*.iws
+.idea/
+#.vscode/
+
+# ── Flutter / Dart / Pub ──────────────────────────────────────────────────────
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Generated files (Freezed / json_serializable)
+*.g.dart
+*.freezed.dart
+
+# ── Symbolication / Obfuscation ───────────────────────────────────────────────
+app.*.symbols
+app.*.map.json
+
+# ── Android Studio artifacts ──────────────────────────────────────────────────
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ── Supabase ──────────────────────────────────────────────────────────────────
+supabase/.temp/
+supabase/functions/.cache/
