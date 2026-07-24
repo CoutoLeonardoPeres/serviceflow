@@ -1,20 +1,22 @@
 # ServiceFlow — Estado do Projeto
 
-**Última atualização:** 2026-07-23 · **Entrega atual concluída:** F2 parcial (Hubs iniciais dos módulos premium por plano) · **Entrega em andamento:** F2 (Integração com gateway real assinado)
+**Última atualização:** 2026-07-24 · **Entrega atual concluída:** F0 (Higiene técnica pré-produção, parcial) · **Entrega em andamento:** F1 (Validação de segurança RLS)
 
 ## Status
 
 | Item | Estado |
 |---|---|
-| Fase | F2 — Planos, assinatura e operação comercial |
-| Código Flutter | ✅ features/customers + features/service_requests + features/scheduling + features/professionals + features/quotations + features/work_orders + features/financials + features/reports |
-| Migrations | ✅ 0001_foundation a 0018_service_professionals versionadas no repositório |
-| Ambientes | ⏳ Requer `dart_defines/dev.json` com credenciais reais |
-| Build runner | ⏳ `flutter pub run build_runner build` obrigatório antes de compilar (Freezed) |
-| Testes Flutter | ✅ release check local com análise, testes críticos, build e smoke passou |
-| Testes SQL | ⏳ 0003 a 0007 criados; execução de isolamento depende de usuários/UUIDs reais do seed |
-| Documentação | ✅ Fundação, manuais de reconstrução, SQL, deploy, release, convites e estado do projeto atualizados |
-| Git | ⏳ Commit pendente (`rm .git/index.lock` no terminal, depois `git add -A && git commit`) |
+| Fase | F0/F1 — Higiene técnica concluída; validação de segurança RLS é o próximo bloqueador do MVP |
+| Código Flutter | ✅ features/customers + features/service_requests + features/scheduling + features/professionals + features/quotations + features/work_orders + features/financials + features/reports + features/settings + features/modules + features/promotions |
+| Migrations | ✅ 0001 a 0035 versionadas no repositório, sequência contígua sem duplicidade (colisão de prefixo `0034` corrigida em 2026-07-24) |
+| Ambientes | ⏳ Requer `dart_defines/dev.json` com credenciais reais (arquivo local, fora do Git) |
+| Build runner | ⏳ `flutter pub run build_runner build` obrigatório antes de compilar (Freezed) — **não executado nesta sessão**: ambiente de análise não possui Flutter SDK instalado nem acesso de rede a pub.dev/storage.googleapis.com. Rodar localmente. |
+| `flutter analyze` | ⏳ **Não executado nesta sessão** (mesmo bloqueio de ambiente). Rodar localmente antes do próximo commit. |
+| Testes Flutter | ⏳ **Não executados nesta sessão** (mesmo bloqueio de ambiente). Rodar localmente: `flutter test test/auth/validators_test.dart test/dashboard/dashboard_screen_test.dart test/financials/financial_list_screen_test.dart test/router/app_router_redirect_test.dart` |
+| Testes SQL | ⏳ 0002 a 0013 criados (13 roteiros em `test/isolation/`); execução de isolamento depende de usuários/UUIDs reais do seed — **critério bloqueador do aceite do MVP** |
+| Documentação | ✅ Fundação, manuais de reconstrução, SQL, deploy, release, convites, estado do projeto e relatório técnico de auditoria (2026-07-24) atualizados |
+| Git | ✅ **Resolvido em 2026-07-24**: `.git/index.lock` era um lock órfão no mount FUSE do diretório de trabalho (não removível por `rm`, mas contornável por `mv` no mesmo diretório). Todo o trabalho de E4 até F2 (156 mudanças pendentes) foi dividido em 28 commits lógicos e coesos por feature/migration/docs. `git status` limpo. |
+| PII / dados sensíveis | ⚠️ **Achado em 2026-07-24**: `scripts/import_customers_eletroceu_20260722.sql` e `docs/imports/clientes_vcf_preview_2026-07-23.csv` continham dados reais de clientes (nome, CPF, e-mail, telefone, endereço) de um tenant real. Ambos foram **excluídos do Git** e adicionados ao `.gitignore`. Arquivos permanecem no disco local, fora do controle de versão. |
 | Deploy | ⏳ Pacote e smoke test prontos; publicação Hostinger depende de acesso externo |
 
 ## Estrutura do repositório
