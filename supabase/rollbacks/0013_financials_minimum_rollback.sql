@@ -1,0 +1,14 @@
+DROP POLICY IF EXISTS "receipts_insert" ON receipts;
+DROP POLICY IF EXISTS "receipts_select" ON receipts;
+DROP POLICY IF EXISTS "payment_records_insert" ON payment_records;
+DROP POLICY IF EXISTS "payment_records_select" ON payment_records;
+DROP POLICY IF EXISTS "receivables_update" ON receivables;
+DROP POLICY IF EXISTS "receivables_insert" ON receivables;
+DROP POLICY IF EXISTS "receivables_select" ON receivables;
+DROP FUNCTION IF EXISTS register_manual_payment(uuid, text, integer, text, text);
+DROP FUNCTION IF EXISTS create_receivable_from_work_order(uuid, date);
+DROP TRIGGER IF EXISTS trg_receivables_meta ON receivables;
+DROP FUNCTION IF EXISTS _sf_set_receivable_meta();
+DROP TABLE IF EXISTS receipts;
+DROP TABLE IF EXISTS payment_records;
+DROP TABLE IF EXISTS receivables;

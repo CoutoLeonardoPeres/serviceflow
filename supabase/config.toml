@@ -1,6 +1,6 @@
 # Supabase CLI config — https://supabase.com/docs/reference/cli/config
-# project_id: substitua pelo ID do seu projeto (visível no dashboard, não é um segredo)
-project_id = "SEU_PROJECT_ID_AQUI"
+# project_id: visível no dashboard; não é segredo.
+project_id = "pkbluscdssiiumrppmwa"
 
 [api]
 port = 54321

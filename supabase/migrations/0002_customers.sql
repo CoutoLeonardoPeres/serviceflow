@@ -6,6 +6,8 @@
 -- Rollback: 0002_customers_rollback.sql
 -- =============================================================================
 
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
+
 -- ---------------------------------------------------------------------------
 -- CLIENTES
 -- ---------------------------------------------------------------------------
@@ -45,8 +47,7 @@ CREATE UNIQUE INDEX uq_customers_document_tenant
 -- índices de busca
 CREATE INDEX idx_customers_tenant        ON customers(tenant_id);
 CREATE INDEX idx_customers_tenant_active ON customers(tenant_id, is_active);
-CREATE INDEX idx_customers_name_trgm     ON customers USING gin(name gin_trgm_ops)
-  WHERE EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm');
+CREATE INDEX idx_customers_name_trgm     ON customers USING gin(name gin_trgm_ops);
 CREATE INDEX idx_customers_tenant_name   ON customers(tenant_id, name text_pattern_ops);
 
 -- ---------------------------------------------------------------------------
