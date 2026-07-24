@@ -34,13 +34,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final currency = NumberFormat.simpleCurrency(locale: 'pt_BR');
     final planSnapshot = ref.watch(currentTenantPlanProvider);
     final features = ref.watch(currentPlanFeatureSetProvider);
-    // ignore: avoid_print
-    print(
-      '=== DEBUG DASHBOARD: plan=${planSnapshot.plan.key} '
-      'planFeatures=${planSnapshot.plan.features} '
-      'watchedFeatures=$features '
-      'containsFinancials=${features.contains(TenantFeature.financials)} ===',
-    );
     final trialText = planSnapshot.trialEndsAt == null
         ? null
         : DateFormat('dd/MM/yyyy').format(planSnapshot.trialEndsAt!);

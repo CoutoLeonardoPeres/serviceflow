@@ -25,6 +25,17 @@ void main() {
       customerName: 'Cliente Teste',
     );
 
+    // O dashboard renderiza vários painéis (cabeçalho, métricas de plano,
+    // resumo financeiro) antes da grade de atalhos. No tamanho de tela
+    // padrão do flutter_test (800x600), a lista é uma sliver list que só
+    // constrói os widgets dentro do viewport visível — a grade de atalhos
+    // (onde fica o botão "Financeiro") ficava abaixo da dobra e nunca era
+    // montada na árvore. Aumentamos o viewport para caber todo o conteúdo.
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -58,20 +69,6 @@ void main() {
 
     expect(find.text('Resumo financeiro'), findsOneWidget);
     expect(find.text('Saldo em aberto'), findsOneWidget);
-    // DIAGNÓSTICO TEMPORÁRIO: confirma se o override de
-    // currentTenantPlanProvider está realmente sendo aplicado (deveria
-    // mostrar o label "Enterprise" no card de plano atual).
-    expect(find.text('Enterprise'), findsOneWidget);
-
-    // DIAGNÓSTICO TEMPORÁRIO: lista todos os textos realmente renderizados
-    // na árvore de widgets, para descobrir por que "Financeiro" não aparece.
-    final allTexts = tester
-        .widgetList<Text>(find.byType(Text))
-        .map((t) => t.data)
-        .toList();
-    // ignore: avoid_print
-    print('=== TEXTOS ENCONTRADOS NA ARVORE: $allTexts ===');
-
     expect(find.text('Financeiro'), findsWidgets);
   });
 }
