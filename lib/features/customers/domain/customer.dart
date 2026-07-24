@@ -45,6 +45,7 @@ class Customer with _$Customer {
     required CustomerType type,
     required String name,
     String? tradeName,
+
     /// CPF (11 dígitos) ou CNPJ (14 dígitos) — somente dígitos no armazenamento.
     String? document,
     String? email,

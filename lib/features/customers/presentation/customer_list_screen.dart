@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/app_form_dialog.dart';
 import '../../../core/widgets/error_view.dart';
 import '../application/customer_list_notifier.dart';
 import '../data/customer_repository.dart';
 import '../domain/customer.dart';
+import 'customer_import_dialog.dart';
+import 'customer_form_screen.dart';
 import 'widgets/customer_type_chip.dart';
 
 class CustomerListScreen extends ConsumerStatefulWidget {
@@ -21,6 +24,28 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
   final _scrollCtrl = ScrollController();
   CustomerType? _typeFilter;
   bool? _activeFilter = true; // padrão: apenas ativos
+
+  String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
+
+  bool _matchesSearch(Customer customer) {
+    final search = _searchCtrl.text.trim().toLowerCase();
+    if (search.isEmpty) return true;
+
+    final numericSearch = _digitsOnly(search);
+    final textMatches = <String>[
+      customer.name,
+      customer.tradeName ?? '',
+      customer.email ?? '',
+    ].any((value) => value.toLowerCase().contains(search));
+
+    final numericMatches = numericSearch.isNotEmpty &&
+        <String>[
+          customer.phone ?? '',
+          customer.document ?? '',
+        ].map(_digitsOnly).any((value) => value.contains(numericSearch));
+
+    return textMatches || numericMatches;
+  }
 
   @override
   void initState() {
@@ -48,9 +73,10 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
   }
 
   void _search(String value) {
+    setState(() {});
     ref.read(customerListProvider.notifier).applyFilter(
           CustomerFilter(
-            search: value.trim().isEmpty ? null : value.trim(),
+            search: null,
             type: _typeFilter,
             isActive: _activeFilter,
           ),
@@ -67,9 +93,44 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
     _search(_searchCtrl.text);
   }
 
+  Future<void> _openCustomerDialog() async {
+    final created = await showAppFormDialog<bool>(
+      context: context,
+      title: 'Novo cliente',
+      child: const CustomerFormScreen(embedded: true),
+    );
+    if (created == true && mounted) {
+      ref.read(customerListProvider.notifier).refresh();
+    }
+  }
+
+  Future<void> _openEditCustomerDialog(Customer customer) async {
+    final updated = await showAppFormDialog<bool>(
+      context: context,
+      title: 'Editar cliente',
+      child: CustomerFormScreen(customer: customer, embedded: true),
+    );
+    if (updated == true && mounted) {
+      ref.read(customerListProvider.notifier).refresh();
+    }
+  }
+
+  Future<void> _openImportDialog() async {
+    final imported = await showAppFormDialog<bool>(
+      context: context,
+      title: 'Importar clientes',
+      maxWidth: 980,
+      child: const CustomerImportDialog(),
+    );
+    if (imported == true && mounted) {
+      ref.read(customerListProvider.notifier).refresh();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final listState = ref.watch(customerListProvider);
+    final filteredItems = listState.items.where(_matchesSearch).toList();
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -77,10 +138,14 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
         title: const Text('Clientes'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.upload_file_outlined),
+            tooltip: 'Importar clientes',
+            onPressed: _openImportDialog,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh_outlined),
             tooltip: 'Atualizar',
-            onPressed: () =>
-                ref.read(customerListProvider.notifier).refresh(),
+            onPressed: () => ref.read(customerListProvider.notifier).refresh(),
           ),
         ],
       ),
@@ -91,7 +156,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: SearchBar(
               controller: _searchCtrl,
-              hintText: 'Buscar por nome…',
+              hintText: 'Buscar por nome, telefone, CPF/CNPJ ou e-mail…',
               leading: const Icon(Icons.search_outlined),
               trailing: [
                 if (_searchCtrl.text.isNotEmpty)
@@ -132,8 +197,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
                       child: FilterChip(
                         label: Text(type.label),
                         selected: _typeFilter == type,
-                        onSelected: (v) =>
-                            _applyTypeFilter(v ? type : null),
+                        onSelected: (v) => _applyTypeFilter(v ? type : null),
                         avatar: Icon(
                           _typeIcon(type),
                           size: 16,
@@ -145,13 +209,13 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
           ),
 
           // ── Contagem ───────────────────────────────────────────────────
-          if (!listState.isLoading && listState.items.isNotEmpty)
+          if (!listState.isLoading && filteredItems.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '${listState.totalCount} cliente(s)',
+                  '${filteredItems.length} cliente(s)',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
@@ -161,19 +225,23 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
 
           // ── Lista ──────────────────────────────────────────────────────
           Expanded(
-            child: _buildBody(context, listState),
+            child: _buildBody(context, listState, filteredItems),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(AppRoutes.customerNew),
+        onPressed: _openCustomerDialog,
         icon: const Icon(Icons.person_add_outlined),
         label: const Text('Novo cliente'),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, CustomerListState state) {
+  Widget _buildBody(
+    BuildContext context,
+    CustomerListState state,
+    List<Customer> filteredItems,
+  ) {
     if (state.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -181,40 +249,41 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
     if (state.error != null && state.items.isEmpty) {
       return ErrorView(
         message: state.error!.userMessage,
-        onRetry: () =>
-            ref.read(customerListProvider.notifier).refresh(),
+        onRetry: () => ref.read(customerListProvider.notifier).refresh(),
       );
     }
 
-    if (state.isEmpty) {
+    if (filteredItems.isEmpty) {
       return EmptyView(
         icon: Icons.people_outline,
         message: 'Nenhum cliente encontrado.',
-        action: ElevatedButton.icon(
-          onPressed: () => context.push(AppRoutes.customerNew),
-          icon: const Icon(Icons.person_add_outlined),
-          label: const Text('Cadastrar cliente'),
+        actionWidget: ElevatedButton.icon(
+          onPressed: _openImportDialog,
+          icon: const Icon(Icons.upload_file_outlined),
+          label: const Text('Importar clientes'),
         ),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: () =>
-          ref.read(customerListProvider.notifier).refresh(),
+      onRefresh: () => ref.read(customerListProvider.notifier).refresh(),
       child: ListView.separated(
         controller: _scrollCtrl,
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-        itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+        itemCount: filteredItems.length + (state.isLoadingMore ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
-          if (index >= state.items.length) {
+          if (index >= filteredItems.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(child: CircularProgressIndicator()),
             );
           }
-          final customer = state.items[index];
-          return _CustomerCard(customer: customer);
+          final customer = filteredItems[index];
+          return _CustomerCard(
+            customer: customer,
+            onEdit: () => _openEditCustomerDialog(customer),
+          );
         },
       ),
     );
@@ -231,9 +300,10 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
 // ── Card de cliente ───────────────────────────────────────────────────────────
 
 class _CustomerCard extends StatelessWidget {
-  const _CustomerCard({required this.customer});
+  const _CustomerCard({required this.customer, required this.onEdit});
 
   final Customer customer;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -291,8 +361,9 @@ class _CustomerCard extends StatelessWidget {
                           const SizedBox(width: 6),
                           Chip(
                             label: const Text('Inativo'),
-                            labelStyle:
-                                TextStyle(color: colorScheme.onErrorContainer, fontSize: 11),
+                            labelStyle: TextStyle(
+                                color: colorScheme.onErrorContainer,
+                                fontSize: 11),
                             backgroundColor: colorScheme.errorContainer,
                             padding: const EdgeInsets.symmetric(horizontal: 4),
                             visualDensity: VisualDensity.compact,
@@ -319,6 +390,13 @@ class _CustomerCard extends StatelessWidget {
                   ],
                 ),
               ),
+              IconButton(
+                tooltip: 'Editar cliente',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
               Icon(
                 Icons.chevron_right,
                 color: colorScheme.onSurfaceVariant,

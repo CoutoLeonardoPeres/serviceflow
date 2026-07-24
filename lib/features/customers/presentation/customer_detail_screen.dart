@@ -3,14 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/router/app_router.dart';
+import '../../../core/location/address_geocoder.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/widgets/address_location_box.dart';
+import '../../../core/widgets/app_form_dialog.dart';
+import '../../../core/widgets/app_form_layout.dart';
 import '../../../core/widgets/error_view.dart';
 import '../application/customer_form_notifier.dart';
 import '../application/customer_list_notifier.dart';
 import '../domain/customer.dart';
 import '../domain/customer_address.dart';
 import '../domain/customer_contact.dart';
+import 'customer_form_screen.dart';
 import 'widgets/customer_type_chip.dart';
 
 class CustomerDetailScreen extends ConsumerStatefulWidget {
@@ -41,8 +45,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    final customerAsync =
-        ref.watch(customerDetailProvider(widget.customerId));
+    final customerAsync = ref.watch(customerDetailProvider(widget.customerId));
 
     return customerAsync.when(
       loading: () => Scaffold(
@@ -62,12 +65,16 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen>
   }
 
   Widget _buildScaffold(BuildContext context, Customer customer) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(customer.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title:
+            Text(customer.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
+          TextButton.icon(
+            onPressed: () => _openEditCustomerDialog(context, customer),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Editar cliente'),
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             onSelected: (value) => _handleAction(context, value, customer),
@@ -89,8 +96,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen>
                         ? Icons.block_outlined
                         : Icons.check_circle_outline,
                   ),
-                  title: Text(
-                      customer.isActive ? 'Desativar' : 'Reativar'),
+                  title: Text(customer.isActive ? 'Desativar' : 'Reativar'),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -118,11 +124,26 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen>
     );
   }
 
+  Future<void> _openEditCustomerDialog(
+    BuildContext context,
+    Customer customer,
+  ) async {
+    final updated = await showAppFormDialog<bool>(
+      context: context,
+      title: 'Editar cliente',
+      child: CustomerFormScreen(customer: customer, embedded: true),
+    );
+    if (updated == true && mounted) {
+      ref.invalidate(customerDetailProvider(customer.id));
+      ref.read(customerListProvider.notifier).refresh();
+    }
+  }
+
   Future<void> _handleAction(
       BuildContext context, String action, Customer customer) async {
     switch (action) {
       case 'edit':
-        context.push(AppRoutes.customerEdit(customer.id), extra: customer);
+        await _openEditCustomerDialog(context, customer);
       case 'deactivate':
         final confirm = await _confirmDialog(
           context,
@@ -136,7 +157,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen>
           await ref
               .read(customerFormProvider.notifier)
               .deactivateCustomer(customer);
-          if (mounted) context.pop();
+          if (context.mounted) Navigator.of(context).pop();
         }
       case 'reactivate':
         await ref.read(customerRepositoryProvider).reactivate(customer.id);
@@ -201,7 +222,8 @@ class _DataTab extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.block, color: colorScheme.onErrorContainer, size: 18),
+                Icon(Icons.block,
+                    color: colorScheme.onErrorContainer, size: 18),
                 const SizedBox(width: 8),
                 Text(
                   'Cliente inativo',
@@ -296,8 +318,8 @@ class _InfoRow extends StatelessWidget {
           Row(
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 16,
-                    color: Theme.of(context).colorScheme.primary),
+                Icon(icon,
+                    size: 16, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 6),
               ],
               Expanded(
@@ -329,15 +351,14 @@ class _ContactsTab extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => ErrorView(
         message: 'Erro ao carregar contatos.',
-        onRetry: () =>
-            ref.invalidate(customerContactsProvider(customerId)),
+        onRetry: () => ref.invalidate(customerContactsProvider(customerId)),
       ),
       data: (contacts) {
         if (contacts.isEmpty) {
           return EmptyView(
             icon: Icons.contacts_outlined,
             message: 'Nenhum contato cadastrado.',
-            action: _AddContactButton(customerId: customerId),
+            actionWidget: _AddContactButton(customerId: customerId),
           );
         }
         return ListView.separated(
@@ -351,10 +372,8 @@ class _ContactsTab extends ConsumerWidget {
             final contact = contacts[i];
             return _ContactCard(
               contact: contact,
-              onEdit: () =>
-                  _showContactForm(context, ref, customerId, contact),
-              onDelete: () =>
-                  _deleteContact(context, ref, contact),
+              onEdit: () => _showContactForm(context, ref, customerId, contact),
+              onDelete: () => _deleteContact(context, ref, contact),
             );
           },
         );
@@ -394,8 +413,7 @@ class _ContactsTab extends ConsumerWidget {
         content: Text('Deseja remover "${contact.name}"?'),
         actions: [
           TextButton(
-              onPressed: () => ctx.pop(false),
-              child: const Text('Cancelar')),
+              onPressed: () => ctx.pop(false), child: const Text('Cancelar')),
           TextButton(
             style: TextButton.styleFrom(
                 foregroundColor: Theme.of(ctx).colorScheme.error),
@@ -554,46 +572,48 @@ class _ContactFormState extends ConsumerState<_ContactForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.existing == null ? 'Novo contato' : 'Editar contato',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'Nome *'),
-              validator: (v) => validateRequired(v, 'Nome'),
-              enabled: !isLoading,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _roleCtrl,
-              decoration:
-                  const InputDecoration(labelText: 'Cargo / Função'),
-              enabled: !isLoading,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _phoneCtrl,
-              decoration: const InputDecoration(labelText: 'Telefone'),
-              keyboardType: TextInputType.phone,
-              validator: validatePhone,
-              enabled: !isLoading,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _emailCtrl,
-              decoration: const InputDecoration(labelText: 'E-mail'),
-              keyboardType: TextInputType.emailAddress,
-              validator: (v) =>
-                  v != null && v.isNotEmpty ? validateEmail(v) : null,
-              enabled: !isLoading,
+            AppFormSection(
+              title:
+                  widget.existing == null ? 'Novo contato' : 'Editar contato',
+              icon: Icons.contact_phone_outlined,
+              child: AppFormGrid(
+                children: [
+                  TextFormField(
+                    controller: _nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Nome *'),
+                    validator: (v) => validateRequired(v, 'Nome'),
+                    enabled: !isLoading,
+                  ),
+                  TextFormField(
+                    controller: _roleCtrl,
+                    decoration:
+                        const InputDecoration(labelText: 'Cargo / Função'),
+                    enabled: !isLoading,
+                  ),
+                  TextFormField(
+                    controller: _phoneCtrl,
+                    decoration: const InputDecoration(labelText: 'Telefone'),
+                    keyboardType: TextInputType.phone,
+                    validator: validatePhone,
+                    enabled: !isLoading,
+                  ),
+                  TextFormField(
+                    controller: _emailCtrl,
+                    decoration: const InputDecoration(labelText: 'E-mail'),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) =>
+                        v != null && v.isNotEmpty ? validateEmail(v) : null,
+                    enabled: !isLoading,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
             SwitchListTile(
               title: const Text('Contato principal'),
               value: _isPrimary,
-              onChanged: isLoading ? null : (v) => setState(() => _isPrimary = v),
+              onChanged:
+                  isLoading ? null : (v) => setState(() => _isPrimary = v),
               contentPadding: EdgeInsets.zero,
             ),
             const SizedBox(height: 16),
@@ -643,15 +663,14 @@ class _AddressesTab extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => ErrorView(
         message: 'Erro ao carregar endereços.',
-        onRetry: () =>
-            ref.invalidate(customerAddressesProvider(customerId)),
+        onRetry: () => ref.invalidate(customerAddressesProvider(customerId)),
       ),
       data: (addresses) {
         if (addresses.isEmpty) {
           return EmptyView(
             icon: Icons.location_on_outlined,
             message: 'Nenhum endereço cadastrado.',
-            action: _AddAddressButton(customerId: customerId),
+            actionWidget: _AddAddressButton(customerId: customerId),
           );
         }
         return ListView.separated(
@@ -709,8 +728,7 @@ class _AddressesTab extends ConsumerWidget {
         content: Text('Deseja remover o endereço "${address.label}"?'),
         actions: [
           TextButton(
-              onPressed: () => ctx.pop(false),
-              child: const Text('Cancelar')),
+              onPressed: () => ctx.pop(false), child: const Text('Cancelar')),
           TextButton(
             style: TextButton.styleFrom(
                 foregroundColor: Theme.of(ctx).colorScheme.error),
@@ -830,6 +848,9 @@ class _AddressFormScreenState extends ConsumerState<_AddressFormScreen> {
       TextEditingController(text: widget.existing?.reference);
   late String _state = widget.existing?.state ?? 'SP';
   late bool _isDefault = widget.existing?.isDefault ?? false;
+  late double? _latitude = widget.existing?.latitude;
+  late double? _longitude = widget.existing?.longitude;
+  bool _isGeocoding = false;
 
   @override
   void dispose() {
@@ -864,9 +885,8 @@ class _AddressFormScreenState extends ConsumerState<_AddressFormScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.existing == null
-            ? 'Novo endereço'
-            : 'Editar endereço'),
+        title:
+            Text(widget.existing == null ? 'Novo endereço' : 'Editar endereço'),
         actions: [
           TextButton(
             onPressed: isLoading ? null : _submit,
@@ -881,105 +901,105 @@ class _AddressFormScreenState extends ConsumerState<_AddressFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextFormField(
-                controller: _labelCtrl,
-                decoration: const InputDecoration(labelText: 'Rótulo *',
-                    hintText: 'Ex.: Sede, Filial, Residência'),
-                validator: (v) => validateRequired(v, 'Rótulo'),
-                enabled: !isLoading,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _cepCtrl,
-                decoration: const InputDecoration(labelText: 'CEP *'),
-                keyboardType: TextInputType.number,
-                validator: validateCep,
-                enabled: !isLoading,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _streetCtrl,
-                decoration: const InputDecoration(labelText: 'Rua / Av. *'),
-                validator: (v) => validateRequired(v, 'Rua'),
-                enabled: !isLoading,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextFormField(
-                      controller: _numberCtrl,
-                      decoration: const InputDecoration(labelText: 'Número *'),
-                      validator: (v) => validateRequired(v, 'Número'),
+              AppFormSection(
+                title: 'Endereço',
+                icon: Icons.location_on_outlined,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppFormGrid(
+                      children: [
+                        TextFormField(
+                          controller: _labelCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Rótulo *',
+                            hintText: 'Ex.: Sede, Filial, Residência',
+                          ),
+                          validator: (v) => validateRequired(v, 'Rótulo'),
+                          enabled: !isLoading,
+                        ),
+                        TextFormField(
+                          controller: _cepCtrl,
+                          decoration: const InputDecoration(labelText: 'CEP *'),
+                          keyboardType: TextInputType.number,
+                          validator: validateCep,
+                          enabled: !isLoading,
+                        ),
+                        TextFormField(
+                          controller: _streetCtrl,
+                          decoration:
+                              const InputDecoration(labelText: 'Rua / Av. *'),
+                          validator: (v) => validateRequired(v, 'Rua'),
+                          enabled: !isLoading,
+                        ),
+                        TextFormField(
+                          controller: _numberCtrl,
+                          decoration:
+                              const InputDecoration(labelText: 'Número *'),
+                          validator: (v) => validateRequired(v, 'Número'),
+                          enabled: !isLoading,
+                        ),
+                        TextFormField(
+                          controller: _complementCtrl,
+                          decoration:
+                              const InputDecoration(labelText: 'Complemento'),
+                          enabled: !isLoading,
+                        ),
+                        TextFormField(
+                          controller: _districtCtrl,
+                          decoration:
+                              const InputDecoration(labelText: 'Bairro *'),
+                          validator: (v) => validateRequired(v, 'Bairro'),
+                          enabled: !isLoading,
+                        ),
+                        TextFormField(
+                          controller: _cityCtrl,
+                          decoration:
+                              const InputDecoration(labelText: 'Cidade *'),
+                          validator: (v) => validateRequired(v, 'Cidade'),
+                          enabled: !isLoading,
+                        ),
+                        DropdownButtonFormField<String>(
+                          initialValue: _state,
+                          decoration: const InputDecoration(labelText: 'UF *'),
+                          items: kBrazilianStates
+                              .map((uf) => DropdownMenuItem(
+                                    value: uf,
+                                    child: Text(uf),
+                                  ))
+                              .toList(),
+                          onChanged: isLoading
+                              ? null
+                              : (v) => setState(() => _state = v ?? 'SP'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _referenceCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Ponto de referência',
+                        hintText: 'Ex.: Próximo ao supermercado X',
+                      ),
                       enabled: !isLoading,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 3,
-                    child: TextFormField(
-                      controller: _complementCtrl,
-                      decoration:
-                          const InputDecoration(labelText: 'Complemento'),
-                      enabled: !isLoading,
+                    const SizedBox(height: 14),
+                    AddressLocationBox(
+                      latitude: _latitude,
+                      longitude: _longitude,
+                      isLoading: _isGeocoding,
+                      onLocate:
+                          isLoading || _isGeocoding ? null : _lookupCoordinates,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _districtCtrl,
-                decoration: const InputDecoration(labelText: 'Bairro *'),
-                validator: (v) => validateRequired(v, 'Bairro'),
-                enabled: !isLoading,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: TextFormField(
-                      controller: _cityCtrl,
-                      decoration: const InputDecoration(labelText: 'Cidade *'),
-                      validator: (v) => validateRequired(v, 'Cidade'),
-                      enabled: !isLoading,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: DropdownButtonFormField<String>(
-                      value: _state,
-                      decoration: const InputDecoration(labelText: 'UF *'),
-                      items: kBrazilianStates
-                          .map((uf) => DropdownMenuItem(
-                                value: uf,
-                                child: Text(uf),
-                              ))
-                          .toList(),
-                      onChanged: isLoading
-                          ? null
-                          : (v) => setState(() => _state = v ?? 'SP'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _referenceCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Ponto de referência',
-                    hintText: 'Ex.: Próximo ao supermercado X'),
-                enabled: !isLoading,
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
               SwitchListTile(
                 title: const Text('Endereço padrão'),
                 value: _isDefault,
-                onChanged: isLoading
-                    ? null
-                    : (v) => setState(() => _isDefault = v),
+                onChanged:
+                    isLoading ? null : (v) => setState(() => _isDefault = v),
                 contentPadding: EdgeInsets.zero,
               ),
               const SizedBox(height: 24),
@@ -1014,7 +1034,55 @@ class _AddressFormScreenState extends ConsumerState<_AddressFormScreen> {
           city: _cityCtrl.text,
           state_: _state,
           reference: _referenceCtrl.text,
+          latitude: _latitude,
+          longitude: _longitude,
           isDefault: _isDefault,
         );
+  }
+
+  Future<void> _lookupCoordinates() async {
+    final requiredFields = [
+      _streetCtrl.text,
+      _numberCtrl.text,
+      _cityCtrl.text,
+      _state,
+    ];
+    final hasRequiredAddress =
+        requiredFields.every((field) => field.trim().isNotEmpty);
+    if (!hasRequiredAddress) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Preencha rua, número, cidade e UF para localizar.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isGeocoding = true);
+    try {
+      final coordinates = await const AddressGeocoder().locate(
+        street: _streetCtrl.text,
+        number: _numberCtrl.text,
+        district: _districtCtrl.text,
+        city: _cityCtrl.text,
+        state: _state,
+        cep: _cepCtrl.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _latitude = coordinates.latitude;
+        _longitude = coordinates.longitude;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Endereço localizado no mapa.')),
+      );
+    } on AddressGeocoderException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } finally {
+      if (mounted) setState(() => _isGeocoding = false);
+    }
   }
 }

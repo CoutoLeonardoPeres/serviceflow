@@ -55,9 +55,8 @@ extension CustomerAssetJsonExt on CustomerAsset {
       };
 
   String get displayName {
-    final details = [brand, model]
-        .where((s) => s != null && s!.isNotEmpty)
-        .join(' ');
+    final details =
+        [brand, model].where((s) => s != null && s.isNotEmpty).join(' ');
     return details.isEmpty ? name : '$name — $details';
   }
 }

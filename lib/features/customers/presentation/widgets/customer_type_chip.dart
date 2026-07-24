@@ -12,10 +12,22 @@ class CustomerTypeChip extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     final (color, icon) = switch (type) {
-      CustomerType.person => (colorScheme.secondaryContainer, Icons.person_outline),
-      CustomerType.company => (colorScheme.tertiaryContainer, Icons.business_outlined),
-      CustomerType.condominium => (colorScheme.primaryContainer, Icons.apartment_outlined),
-      CustomerType.publicEntity => (colorScheme.surfaceContainerHighest, Icons.account_balance_outlined),
+      CustomerType.person => (
+          colorScheme.secondaryContainer,
+          Icons.person_outline
+        ),
+      CustomerType.company => (
+          colorScheme.tertiaryContainer,
+          Icons.business_outlined
+        ),
+      CustomerType.condominium => (
+          colorScheme.primaryContainer,
+          Icons.apartment_outlined
+        ),
+      CustomerType.publicEntity => (
+          colorScheme.surfaceContainerHighest,
+          Icons.account_balance_outlined
+        ),
     };
 
     return Chip(

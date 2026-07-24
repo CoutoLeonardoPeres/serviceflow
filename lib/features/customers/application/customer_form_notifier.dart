@@ -50,12 +50,25 @@ class CustomerFormNotifier extends Notifier<CustomerFormState> {
     String? phone,
     String? notes,
     String? payerCustomerId,
+    String? contactName,
+    String? contactPhone,
+    String? contactEmail,
+    String? addressCep,
+    String? addressStreet,
+    String? addressNumber,
+    String? addressComplement,
+    String? addressDistrict,
+    String? addressCity,
+    String? addressState,
+    String? addressReference,
+    double? addressLatitude,
+    double? addressLongitude,
   }) async {
     state = const CustomerFormLoading();
 
     final customer = Customer(
-      id: '',           // servidor gera
-      tenantId: '',     // servidor deriva da membership (trigger)
+      id: '', // servidor gera
+      tenantId: '', // servidor deriva da membership (trigger)
       type: type,
       name: name.trim(),
       tradeName: tradeName?.trim().isEmpty == true ? null : tradeName?.trim(),
@@ -75,6 +88,68 @@ class CustomerFormNotifier extends Notifier<CustomerFormState> {
 
     try {
       final created = await _repo.create(customer);
+      final primaryContactName = contactName?.trim();
+      if (primaryContactName != null && primaryContactName.isNotEmpty) {
+        await _repo.addContact(
+          CustomerContact(
+            id: '',
+            tenantId: '',
+            customerId: created.id,
+            name: primaryContactName,
+            phone: contactPhone?.replaceAll(RegExp(r'\D'), '').isEmpty == true
+                ? null
+                : contactPhone?.replaceAll(RegExp(r'\D'), ''),
+            whatsapp:
+                contactPhone?.replaceAll(RegExp(r'\D'), '').isEmpty == true
+                    ? null
+                    : contactPhone?.replaceAll(RegExp(r'\D'), ''),
+            email: contactEmail?.trim().isEmpty == true
+                ? null
+                : contactEmail?.trim(),
+            isPrimary: true,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+      }
+      final initialAddressFields = [
+        addressCep,
+        addressStreet,
+        addressNumber,
+        addressDistrict,
+        addressCity,
+        addressState,
+      ];
+      final hasInitialAddress = initialAddressFields.every(
+        (field) => field?.trim().isNotEmpty == true,
+      );
+      if (hasInitialAddress) {
+        await _repo.addAddress(
+          CustomerAddress(
+            id: '',
+            tenantId: '',
+            customerId: created.id,
+            label: 'Principal',
+            cep: addressCep!.replaceAll(RegExp(r'\D'), ''),
+            street: addressStreet!.trim(),
+            number: addressNumber!.trim(),
+            complement: addressComplement?.trim().isEmpty == true
+                ? null
+                : addressComplement?.trim(),
+            district: addressDistrict!.trim(),
+            city: addressCity!.trim(),
+            state: addressState!,
+            reference: addressReference?.trim().isEmpty == true
+                ? null
+                : addressReference?.trim(),
+            latitude: addressLatitude,
+            longitude: addressLongitude,
+            isDefault: true,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+      }
       // Atualiza lista sem recarregar
       ref.read(customerListProvider.notifier).load();
       state = CustomerFormSuccess(customer: created, isCreate: true);
@@ -82,10 +157,7 @@ class CustomerFormNotifier extends Notifier<CustomerFormState> {
       state = CustomerFormError(error: e);
     } catch (e) {
       state = CustomerFormError(
-        error: UnexpectedError(
-          userMessage: 'Erro ao criar cliente.',
-          internalDetail: e.toString(),
-        ),
+        error: UnexpectedError('Erro ao criar cliente.', e.toString()),
       );
     }
   }
@@ -101,6 +173,17 @@ class CustomerFormNotifier extends Notifier<CustomerFormState> {
     String? phone,
     String? notes,
     String? payerCustomerId,
+    CustomerAddress? existingAddress,
+    String? addressCep,
+    String? addressStreet,
+    String? addressNumber,
+    String? addressComplement,
+    String? addressDistrict,
+    String? addressCity,
+    String? addressState,
+    String? addressReference,
+    double? addressLatitude,
+    double? addressLongitude,
   }) async {
     state = const CustomerFormLoading();
 
@@ -121,16 +204,55 @@ class CustomerFormNotifier extends Notifier<CustomerFormState> {
 
     try {
       final saved = await _repo.update(original.id, updated);
+      final initialAddressFields = [
+        addressCep,
+        addressStreet,
+        addressNumber,
+        addressDistrict,
+        addressCity,
+        addressState,
+      ];
+      final hasInitialAddress = initialAddressFields.every(
+        (field) => field?.trim().isNotEmpty == true,
+      );
+      if (hasInitialAddress) {
+        final address = CustomerAddress(
+          id: existingAddress?.id ?? '',
+          tenantId: existingAddress?.tenantId ?? '',
+          customerId: saved.id,
+          label: existingAddress?.label ?? 'Principal',
+          cep: addressCep!.replaceAll(RegExp(r'\D'), ''),
+          street: addressStreet!.trim(),
+          number: addressNumber!.trim(),
+          complement: addressComplement?.trim().isEmpty == true
+              ? null
+              : addressComplement?.trim(),
+          district: addressDistrict!.trim(),
+          city: addressCity!.trim(),
+          state: addressState!,
+          reference: addressReference?.trim().isEmpty == true
+              ? null
+              : addressReference?.trim(),
+          latitude: addressLatitude,
+          longitude: addressLongitude,
+          isDefault: existingAddress?.isDefault ?? true,
+          createdAt: existingAddress?.createdAt ?? DateTime.now(),
+          updatedAt: DateTime.now(),
+          createdBy: existingAddress?.createdBy,
+        );
+        if (existingAddress == null) {
+          await _repo.addAddress(address);
+        } else {
+          await _repo.updateAddress(address);
+        }
+      }
       ref.read(customerListProvider.notifier).updateInList(saved);
       state = CustomerFormSuccess(customer: saved, isCreate: false);
     } on AppError catch (e) {
       state = CustomerFormError(error: e);
     } catch (e) {
       state = CustomerFormError(
-        error: UnexpectedError(
-          userMessage: 'Erro ao atualizar cliente.',
-          internalDetail: e.toString(),
-        ),
+        error: UnexpectedError('Erro ao atualizar cliente.', e.toString()),
       );
     }
   }
@@ -146,10 +268,7 @@ class CustomerFormNotifier extends Notifier<CustomerFormState> {
       state = CustomerFormError(error: e);
     } catch (e) {
       state = CustomerFormError(
-        error: UnexpectedError(
-          userMessage: 'Erro ao desativar cliente.',
-          internalDetail: e.toString(),
-        ),
+        error: UnexpectedError('Erro ao desativar cliente.', e.toString()),
       );
     }
   }
@@ -227,10 +346,7 @@ class CustomerContactFormNotifier extends Notifier<ContactFormState> {
       state = ContactFormError(error: e);
     } catch (e) {
       state = ContactFormError(
-        error: UnexpectedError(
-          userMessage: 'Erro ao salvar contato.',
-          internalDetail: e.toString(),
-        ),
+        error: UnexpectedError('Erro ao salvar contato.', e.toString()),
       );
     }
   }
@@ -280,6 +396,8 @@ class CustomerAddressFormNotifier extends Notifier<AddressFormState> {
     required String city,
     required String state_,
     String? reference,
+    double? latitude,
+    double? longitude,
     required bool isDefault,
   }) async {
     state = const AddressFormLoading();
@@ -292,11 +410,14 @@ class CustomerAddressFormNotifier extends Notifier<AddressFormState> {
       cep: cep.replaceAll(RegExp(r'\D'), ''),
       street: street.trim(),
       number: number.trim(),
-      complement: complement?.trim().isEmpty == true ? null : complement?.trim(),
+      complement:
+          complement?.trim().isEmpty == true ? null : complement?.trim(),
       district: district.trim(),
       city: city.trim(),
       state: state_,
       reference: reference?.trim().isEmpty == true ? null : reference?.trim(),
+      latitude: latitude,
+      longitude: longitude,
       isDefault: isDefault,
       createdAt: existing?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
@@ -312,10 +433,7 @@ class CustomerAddressFormNotifier extends Notifier<AddressFormState> {
       state = AddressFormError(error: e);
     } catch (e) {
       state = AddressFormError(
-        error: UnexpectedError(
-          userMessage: 'Erro ao salvar endereço.',
-          internalDetail: e.toString(),
-        ),
+        error: UnexpectedError('Erro ao salvar endereço.', e.toString()),
       );
     }
   }

@@ -29,33 +29,95 @@ class CustomerRepository {
 
   final SupabaseClient _client;
 
-  static const _table          = 'customers';
-  static const _contactsTable  = 'customer_contacts';
+  static const _table = 'customers';
+  static const _contactsTable = 'customer_contacts';
   static const _addressesTable = 'customer_addresses';
-  static const _assetsTable    = 'customer_assets';
-  static const _pageSize       = 20;
+  static const _assetsTable = 'customer_assets';
+  static const _pageSize = 20;
+
+  String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
+
+  bool _matchesSearch(Customer customer, String search) {
+    final normalizedSearch = search.trim().toLowerCase();
+    final numericSearch = _digitsOnly(search);
+
+    final textFields = <String>[
+      customer.name,
+      customer.tradeName ?? '',
+      customer.email ?? '',
+    ].map((value) => value.toLowerCase());
+
+    final matchesText = textFields.any(
+      (value) => value.contains(normalizedSearch),
+    );
+
+    final matchesNumeric = numericSearch.isNotEmpty &&
+        <String>[
+          customer.phone ?? '',
+          customer.document ?? '',
+        ].map(_digitsOnly).any((value) => value.contains(numericSearch));
+
+    return matchesText || matchesNumeric;
+  }
+
+  Future<({Set<String> documents, Set<String> phones})>
+      findExistingDocumentAndPhoneConflicts({
+    Set<String> documents = const {},
+    Set<String> phones = const {},
+  }) async {
+    try {
+      final foundDocuments = <String>{};
+      final foundPhones = <String>{};
+
+      if (documents.isNotEmpty) {
+        final rows = await _client
+            .from(_table)
+            .select('document')
+            .inFilter('document', documents.toList());
+        for (final row in (rows as List<dynamic>)) {
+          final value = (row as Map<String, dynamic>)['document'] as String?;
+          if (value != null && value.isNotEmpty) {
+            foundDocuments.add(value);
+          }
+        }
+      }
+
+      if (phones.isNotEmpty) {
+        final rows = await _client
+            .from(_table)
+            .select('phone')
+            .inFilter('phone', phones.toList());
+        for (final row in (rows as List<dynamic>)) {
+          final value = (row as Map<String, dynamic>)['phone'] as String?;
+          if (value != null && value.isNotEmpty) {
+            foundPhones.add(value);
+          }
+        }
+      }
+
+      return (documents: foundDocuments, phones: foundPhones);
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+        'Erro ao verificar clientes existentes.',
+        e.toString(),
+      );
+    }
+  }
 
   // ── Listagem ──────────────────────────────────────────────────────────────
 
-  /// Lista clientes com paginação e filtros server-side.
+  /// Lista clientes com paginação.
+  /// Para busca textual/numérica, aplica filtro local para evitar inconsistências
+  /// entre nome, telefone, CPF/CNPJ e e-mail no PostgREST.
   /// Retorna os itens da página e o total de registros (para controle de paginação).
   Future<({List<Customer> items, int totalCount})> listPaged({
     CustomerFilter filter = const CustomerFilter(),
     int page = 0,
   }) async {
     try {
-      final from = page * _pageSize;
-      final to   = from + _pageSize - 1;
-
-      // supabase_flutter 2.x: PostgrestFilterBuilder suporta encadeamento.
-      // FetchOptions(count: exact) faz o PostgREST retornar Content-Range.
-      var query = _client
-          .from(_table)
-          .select('*', const FetchOptions(count: CountOption.exact));
-
-      if (filter.search != null && filter.search!.isNotEmpty) {
-        query = query.ilike('name', '%${filter.search!}%');
-      }
+      var query = _client.from(_table).select('*');
       if (filter.type != null) {
         query = query.eq('type', filter.type!.value);
       }
@@ -63,29 +125,33 @@ class CustomerRepository {
         query = query.eq('is_active', filter.isActive!);
       }
 
-      final response = await query.order('name').range(from, to);
+      final response = await query.order('name').range(0, 999);
 
-      final items = (response as List<dynamic>)
+      var allItems = (response as List<dynamic>)
           .map((r) => customerFromRow(r as Map<String, dynamic>))
           .toList();
 
-      // Estimativa conservadora de total:
-      // se retornou uma página cheia, o total é ao menos (page+1)*pageSize.
-      // O count real virá no cabeçalho Content-Range em chamadas HEAD — para MVP
-      // usamos a heurística: se items < pageSize, chegamos ao fim.
-      final isLastPage = items.length < _pageSize;
-      final totalCount = isLastPage
-          ? page * _pageSize + items.length
-          : (page + 2) * _pageSize; // estimativa: há ao menos mais uma página
+      final search = filter.search?.trim();
+      if (search != null && search.isNotEmpty) {
+        allItems = allItems
+            .where((customer) => _matchesSearch(customer, search))
+            .toList();
+      }
+
+      final totalCount = allItems.length;
+      final from = page * _pageSize;
+      if (from >= totalCount) {
+        return (items: const <Customer>[], totalCount: totalCount);
+      }
+
+      final toExclusive = (from + _pageSize).clamp(0, totalCount);
+      final items = allItems.sublist(from, toExclusive);
 
       return (items: items, totalCount: totalCount);
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao carregar clientes.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao carregar clientes.', e.toString());
     }
   }
 
@@ -93,22 +159,15 @@ class CustomerRepository {
 
   Future<Customer> get(String id) async {
     try {
-      final row = await _client
-          .from(_table)
-          .select()
-          .eq('id', id)
-          .single();
+      final row = await _client.from(_table).select().eq('id', id).single();
       return customerFromRow(row);
     } on PostgrestException catch (e) {
       if (e.code == 'PGRST116') {
-        throw NotFoundError(userMessage: 'Cliente não encontrado.');
+        throw const NotFoundError('Cliente não encontrado.');
       }
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao carregar cliente.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao carregar cliente.', e.toString());
     }
   }
 
@@ -117,25 +176,16 @@ class CustomerRepository {
   Future<Customer> create(Customer customer) async {
     try {
       final payload = customer.toInsertPayload();
-      final row = await _client
-          .from(_table)
-          .insert(payload)
-          .select()
-          .single();
+      final row = await _client.from(_table).insert(payload).select().single();
       return customerFromRow(row);
     } on PostgrestException catch (e) {
-      if (e.code == '23505') {
-        // uq_customers_document_tenant
-        throw BusinessRuleError(
-          userMessage: 'Já existe um cliente com este CPF/CNPJ cadastrado.',
-        );
+      final duplicateError = _mapCustomerDuplicateError(e);
+      if (duplicateError != null) {
+        throw duplicateError;
       }
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao criar cliente.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao criar cliente.', e.toString());
     }
   }
 
@@ -150,50 +200,34 @@ class CustomerRepository {
           .single();
       return customerFromRow(row);
     } on PostgrestException catch (e) {
-      if (e.code == '23505') {
-        throw BusinessRuleError(
-          userMessage: 'Já existe um cliente com este CPF/CNPJ cadastrado.',
-        );
+      final duplicateError = _mapCustomerDuplicateError(e);
+      if (duplicateError != null) {
+        throw duplicateError;
       }
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao atualizar cliente.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao atualizar cliente.', e.toString());
     }
   }
 
   /// Soft delete — marca is_active = false.
   Future<void> deactivate(String id) async {
     try {
-      await _client
-          .from(_table)
-          .update({'is_active': false})
-          .eq('id', id);
+      await _client.from(_table).update({'is_active': false}).eq('id', id);
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao desativar cliente.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao desativar cliente.', e.toString());
     }
   }
 
   Future<void> reactivate(String id) async {
     try {
-      await _client
-          .from(_table)
-          .update({'is_active': true})
-          .eq('id', id);
+      await _client.from(_table).update({'is_active': true}).eq('id', id);
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao reativar cliente.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao reativar cliente.', e.toString());
     }
   }
 
@@ -213,10 +247,7 @@ class CustomerRepository {
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao carregar contatos.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao carregar contatos.', e.toString());
     }
   }
 
@@ -230,16 +261,13 @@ class CustomerRepository {
       return customerContactFromRow(row);
     } on PostgrestException catch (e) {
       if (e.code == '23505') {
-        throw BusinessRuleError(
-          userMessage: 'Este cliente já possui um contato principal.',
+        throw const BusinessRuleError(
+          'Este cliente já possui um contato principal.',
         );
       }
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao adicionar contato.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao adicionar contato.', e.toString());
     }
   }
 
@@ -254,16 +282,13 @@ class CustomerRepository {
       return customerContactFromRow(row);
     } on PostgrestException catch (e) {
       if (e.code == '23505') {
-        throw BusinessRuleError(
-          userMessage: 'Este cliente já possui um contato principal.',
+        throw const BusinessRuleError(
+          'Este cliente já possui um contato principal.',
         );
       }
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao atualizar contato.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao atualizar contato.', e.toString());
     }
   }
 
@@ -273,10 +298,7 @@ class CustomerRepository {
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao remover contato.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao remover contato.', e.toString());
     }
   }
 
@@ -296,10 +318,7 @@ class CustomerRepository {
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao carregar endereços.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao carregar endereços.', e.toString());
     }
   }
 
@@ -313,16 +332,13 @@ class CustomerRepository {
       return customerAddressFromRow(row);
     } on PostgrestException catch (e) {
       if (e.code == '23505') {
-        throw BusinessRuleError(
-          userMessage: 'Este cliente já possui um endereço padrão.',
+        throw const BusinessRuleError(
+          'Este cliente já possui um endereço padrão.',
         );
       }
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao adicionar endereço.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao adicionar endereço.', e.toString());
     }
   }
 
@@ -337,16 +353,13 @@ class CustomerRepository {
       return customerAddressFromRow(row);
     } on PostgrestException catch (e) {
       if (e.code == '23505') {
-        throw BusinessRuleError(
-          userMessage: 'Este cliente já possui um endereço padrão.',
+        throw const BusinessRuleError(
+          'Este cliente já possui um endereço padrão.',
         );
       }
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao atualizar endereço.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao atualizar endereço.', e.toString());
     }
   }
 
@@ -356,10 +369,7 @@ class CustomerRepository {
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao remover endereço.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao remover endereço.', e.toString());
     }
   }
 
@@ -379,10 +389,7 @@ class CustomerRepository {
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao carregar equipamentos.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao carregar equipamentos.', e.toString());
     }
   }
 
@@ -397,25 +404,47 @@ class CustomerRepository {
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
-      throw UnexpectedError(
-        userMessage: 'Erro ao adicionar equipamento.',
-        internalDetail: e.toString(),
-      );
+      throw UnexpectedError('Erro ao adicionar equipamento.', e.toString());
     }
   }
 
   // ── Mapeamento de erros ───────────────────────────────────────────────────
 
+  AppError? _mapCustomerDuplicateError(PostgrestException e) {
+    if (e.code != '23505') return null;
+
+    final detail =
+        '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'.toLowerCase();
+
+    if (detail.contains('uq_customers_phone_tenant') ||
+        detail.contains('(tenant_id, phone)')) {
+      return const BusinessRuleError(
+        'Já existe um cliente com este telefone cadastrado.',
+      );
+    }
+
+    if (detail.contains('uq_customers_document_tenant') ||
+        detail.contains('(tenant_id, document)')) {
+      return const BusinessRuleError(
+        'Já existe um cliente com este CPF/CNPJ cadastrado.',
+      );
+    }
+
+    return const BusinessRuleError(
+      'Já existe um cliente com este CPF/CNPJ ou telefone cadastrado.',
+    );
+  }
+
   AppError _mapError(PostgrestException e) {
     // 42501 = insufficient_privilege (RLS negou acesso)
     if (e.code == '42501' || e.code == 'insufficient_privilege') {
       return const PermissionError(
-        userMessage: 'Você não tem permissão para realizar esta ação.',
+        'Você não tem permissão para realizar esta ação.',
       );
     }
     return UnexpectedError(
-      userMessage: 'Operação falhou. Tente novamente.',
-      internalDetail: '${e.code}: ${e.message}',
+      'Operação falhou. Tente novamente.',
+      '${e.code}: ${e.message}',
     );
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/error/app_error.dart';
 import '../../../shared/providers/supabase_provider.dart';
@@ -60,8 +59,7 @@ class CustomerListNotifier extends Notifier<CustomerListState> {
   @override
   CustomerListState build() => const CustomerListState();
 
-  CustomerRepository get _repo =>
-      CustomerRepository(ref.read(supabaseClientProvider));
+  CustomerRepository get _repo => ref.read(customerRepositoryProvider);
 
   /// Carrega a primeira página com os filtros dados.
   Future<void> load({CustomerFilter? filter}) async {
@@ -88,9 +86,7 @@ class CustomerListNotifier extends Notifier<CustomerListState> {
       state = state.copyWith(
         isLoading: false,
         error: UnexpectedError(
-          userMessage: 'Erro inesperado ao carregar clientes.',
-          internalDetail: e.toString(),
-        ),
+            'Erro inesperado ao carregar clientes.', e.toString()),
       );
     }
   }
@@ -116,10 +112,7 @@ class CustomerListNotifier extends Notifier<CustomerListState> {
     } catch (e) {
       state = state.copyWith(
         isLoadingMore: false,
-        error: UnexpectedError(
-          userMessage: 'Erro ao carregar mais clientes.',
-          internalDetail: e.toString(),
-        ),
+        error: UnexpectedError('Erro ao carregar mais clientes.', e.toString()),
       );
     }
   }
@@ -141,9 +134,7 @@ class CustomerListNotifier extends Notifier<CustomerListState> {
   /// Substitui um cliente na lista local (após editar).
   void updateInList(Customer updated) {
     state = state.copyWith(
-      items: state.items
-          .map((c) => c.id == updated.id ? updated : c)
-          .toList(),
+      items: state.items.map((c) => c.id == updated.id ? updated : c).toList(),
     );
   }
 }
