@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/validators.dart';
+import '../../../core/widgets/app_form_layout.dart';
+import '../../../core/widgets/neomorphic.dart';
 import '../application/tenant_notifier.dart';
 
 /// Tela de criação da empresa — exibida quando o usuário está autenticado
@@ -10,14 +12,13 @@ class CreateTenantScreen extends ConsumerStatefulWidget {
   const CreateTenantScreen({super.key});
 
   @override
-  ConsumerState<CreateTenantScreen> createState() =>
-      _CreateTenantScreenState();
+  ConsumerState<CreateTenantScreen> createState() => _CreateTenantScreenState();
 }
 
 class _CreateTenantScreenState extends ConsumerState<CreateTenantScreen> {
-  final _formKey   = GlobalKey<FormState>();
-  final _nameCtrl  = TextEditingController();
-  final _slugCtrl  = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _slugCtrl = TextEditingController();
 
   @override
   void dispose() {
@@ -72,77 +73,116 @@ class _CreateTenantScreenState extends ConsumerState<CreateTenantScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerLowest,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Icon(Icons.business_rounded, size: 48, color: colorScheme.primary),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Criar sua empresa',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Configure sua empresa para começar a usar o ServiceFlow.',
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 32),
-                      TextFormField(
-                        controller: _nameCtrl,
-                        textInputAction: TextInputAction.next,
-                        enabled: !isLoading,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                          labelText: 'Nome da empresa *',
-                          hintText: 'Ex: Alpha Elétrica',
-                          prefixIcon: Icon(Icons.business_outlined),
+            constraints: const BoxConstraints(maxWidth: 540),
+            child: NeomorphicPanel(
+              padding: const EdgeInsets.all(32),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.center,
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  colorScheme.primary.withValues(alpha: 0.34),
+                              offset: const Offset(8, 12),
+                              blurRadius: 22,
+                            ),
+                          ],
                         ),
-                        validator: (v) => validateRequired(v, 'Nome da empresa'),
-                        onChanged: _autoFillSlug,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _slugCtrl,
-                        textInputAction: TextInputAction.done,
-                        enabled: !isLoading,
-                        decoration: const InputDecoration(
-                          labelText: 'Identificador único *',
-                          hintText: 'alpha-eletrica',
-                          prefixIcon: Icon(Icons.link_rounded),
-                          helperText: 'Apenas letras minúsculas, números e hífens.',
-                          helperMaxLines: 2,
+                        child: const Icon(
+                          Icons.business_rounded,
+                          size: 34,
+                          color: Colors.white,
                         ),
-                        validator: validateSlug,
-                        onFieldSubmitted: (_) => _submit(),
                       ),
-                      const SizedBox(height: 32),
-                      ElevatedButton(
-                        onPressed: isLoading ? null : _submit,
-                        child: isLoading
-                            ? const SizedBox(
-                                height: 20, width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                              )
-                            : const Text('Criar empresa e continuar'),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Criar sua empresa',
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Configure sua empresa para começar a usar o ServiceFlow.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 18),
+                    const Center(
+                      child: NeomorphicBadge(
+                        icon: Icons.domain_verification_outlined,
+                        label: 'Ambiente isolado por empresa',
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 28),
+                    AppFormGrid(
+                      minFieldWidth: 240,
+                      children: [
+                        TextFormField(
+                          controller: _nameCtrl,
+                          textInputAction: TextInputAction.next,
+                          enabled: !isLoading,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: const InputDecoration(
+                            labelText: 'Nome da empresa *',
+                            hintText: 'Ex: Alpha Elétrica',
+                            prefixIcon: Icon(Icons.business_outlined),
+                          ),
+                          validator: (v) =>
+                              validateRequired(v, 'Nome da empresa'),
+                          onChanged: _autoFillSlug,
+                        ),
+                        TextFormField(
+                          controller: _slugCtrl,
+                          textInputAction: TextInputAction.done,
+                          enabled: !isLoading,
+                          decoration: const InputDecoration(
+                            labelText: 'Identificador único *',
+                            hintText: 'alpha-eletrica',
+                            prefixIcon: Icon(Icons.link_rounded),
+                            helperText:
+                                'Apenas letras minúsculas, números e hífens.',
+                            helperMaxLines: 2,
+                          ),
+                          validator: validateSlug,
+                          onFieldSubmitted: (_) => _submit(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    ElevatedButton(
+                      onPressed: isLoading ? null : _submit,
+                      child: isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2.5, color: Colors.white),
+                            )
+                          : const Text('Criar empresa e continuar'),
+                    ),
+                  ],
                 ),
               ),
             ),
