@@ -18,21 +18,234 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="ServiceFlow — gestão de serviços técnicos.">
+  <meta name="theme-color" content="#E9EEF5">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="serviceflow">
+  <meta name="apple-mobile-web-app-title" content="ServiceFlow">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>serviceflow</title>
+  <title>ServiceFlow</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: #e9eef5;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #app-splash {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 82% 8%, rgba(255,255,255,.86) 0 12rem, transparent 12.2rem),
+        radial-gradient(circle at 9% 88%, rgba(60,200,180,.12) 0 11rem, transparent 11.3rem),
+        #e9eef5;
+      color: #36424f;
+      z-index: 9999;
+      transition: opacity .28s ease, visibility .28s ease;
+    }
+
+    #app-splash.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .splash-card {
+      width: min(25rem, calc(100vw - 3rem));
+      padding: 2rem;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,.78);
+      border-radius: 2rem;
+      background: #e9eef5;
+      box-shadow: 22px 26px 54px rgba(128,145,166,.38), -18px -18px 42px rgba(255,255,255,.9);
+    }
+
+    .splash-logo {
+      width: 4rem;
+      height: 4rem;
+      margin: 0 auto 1rem;
+      display: grid;
+      place-items: center;
+      border-radius: 1.2rem;
+      color: white;
+      background: linear-gradient(135deg, #6f5ff2, #3cc8b4);
+      box-shadow: 10px 14px 26px rgba(111,95,242,.28);
+      font-size: 2rem;
+      font-weight: 900;
+    }
+
+    .splash-title {
+      margin: 0;
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .splash-text {
+      margin: .35rem 0 1.6rem;
+      color: #697584;
+      font-size: .98rem;
+    }
+
+    .splash-actions {
+      margin-top: 1.2rem;
+      display: none;
+      justify-content: center;
+      gap: .75rem;
+      flex-wrap: wrap;
+    }
+
+    .splash-button {
+      border: 0;
+      border-radius: 999px;
+      padding: .8rem 1.2rem;
+      background: linear-gradient(135deg, #6f5ff2, #3cc8b4);
+      color: white;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 10px 14px 26px rgba(111,95,242,.22);
+    }
+
+    .splash-button.secondary {
+      background: #e9eef5;
+      color: #4f5d6d;
+      border: 1px solid rgba(79,93,109,.14);
+      box-shadow: inset 3px 3px 6px rgba(255,255,255,.85), inset -3px -3px 6px rgba(128,145,166,.15);
+    }
+
+    #app-splash.is-stalled .splash-text {
+      color: #546273;
+    }
+
+    #app-splash.is-stalled .splash-actions {
+      display: flex;
+    }
+
+    .splash-loader {
+      width: 100%;
+      height: .55rem;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(128,145,166,.18);
+      box-shadow: inset 4px 5px 9px rgba(128,145,166,.25), inset -4px -4px 8px rgba(255,255,255,.85);
+    }
+
+    .splash-loader::before {
+      content: "";
+      display: block;
+      width: 42%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #3cc8b4, #6f5ff2);
+      animation: splash-load 1.15s ease-in-out infinite;
+    }
+
+    @keyframes splash-load {
+      0% { transform: translateX(-110%); }
+      100% { transform: translateX(250%); }
+    }
+  </style>
 </head>
 <body>
+  <div id="app-splash" aria-label="Carregando ServiceFlow">
+    <div class="splash-card">
+      <div class="splash-logo">S</div>
+      <h1 class="splash-title">ServiceFlow</h1>
+      <p class="splash-text" id="app-splash-text">Preparando sua operação de serviços</p>
+      <div class="splash-loader"></div>
+      <div class="splash-actions" id="app-splash-actions">
+        <button class="splash-button" type="button" id="app-splash-reload">Recarregar</button>
+        <button class="splash-button secondary" type="button" id="app-splash-clear">Limpar cache local</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var isLocalHost =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === '::1';
+      var splash = document.getElementById('app-splash');
+      var splashText = document.getElementById('app-splash-text');
+      var reloadButton = document.getElementById('app-splash-reload');
+      var clearButton = document.getElementById('app-splash-clear');
+      var hidden = false;
+
+      async function clearLocalRuntimeCache() {
+        try {
+          if ('serviceWorker' in navigator) {
+            var registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(
+              registrations.map(function (registration) {
+                return registration.unregister();
+              })
+            );
+          }
+          if ('caches' in window) {
+            var cacheKeys = await caches.keys();
+            await Promise.all(
+              cacheKeys.map(function (cacheKey) {
+                return caches.delete(cacheKey);
+              })
+            );
+          }
+        } catch (error) {}
+      }
+
+      function hideSplash() {
+        if (!splash || hidden) return;
+        hidden = true;
+        splash.classList.add('is-hidden');
+        window.setTimeout(function () {
+          splash.remove();
+        }, 320);
+      }
+
+      function markStalled() {
+        if (!splash || hidden) return;
+        splash.classList.add('is-stalled');
+        if (splashText) {
+          splashText.textContent = 'A abertura demorou mais que o normal. Recarregue a página ou limpe o cache local.';
+        }
+      }
+
+      if (reloadButton) {
+        reloadButton.addEventListener('click', function () {
+          window.location.reload();
+        });
+      }
+
+      if (clearButton) {
+        clearButton.addEventListener('click', async function () {
+          try {
+            window.localStorage.clear();
+            window.sessionStorage.clear();
+          } catch (error) {}
+          await clearLocalRuntimeCache();
+          window.location.reload();
+        });
+      }
+
+      if (isLocalHost) {
+        clearLocalRuntimeCache();
+      }
+
+      window.addEventListener('flutter-first-frame', hideSplash);
+
+      window.setTimeout(markStalled, 15000);
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

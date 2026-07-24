@@ -2,5 +2,10 @@
   "SUPABASE_URL": "https://SEU_PROJECT_ID_STAGING.supabase.co",
   "SUPABASE_ANON_KEY": "anon_key_staging",
   "APP_ENV": "staging",
-  "APP_LOG_LEVEL": "info"
+  "APP_LOG_LEVEL": "info",
+  "BILLING_PORTAL_URL": "",
+  "CHECKOUT_STARTER_URL": "",
+  "CHECKOUT_PROFESSIONAL_URL": "",
+  "CHECKOUT_BUSINESS_URL": "",
+  "CHECKOUT_ENTERPRISE_URL": ""
 }

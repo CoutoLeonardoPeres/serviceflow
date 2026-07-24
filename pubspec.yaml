@@ -11,13 +11,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
   flutter_localizations:
     sdk: flutter
 
   # Backend
   supabase_flutter: ^2.8.0
 
-  # Estado — somente Riverpod
+  # Gerenciamento de estado
   flutter_riverpod: ^2.5.1
 
   # Navegação
@@ -29,10 +30,16 @@ dependencies:
 
   # Utilitários
   equatable: ^2.0.5
-  intl: ^0.20.0
+  http: ^1.2.2
+  intl: 0.20.2
+  url_launcher: ^6.3.1
 
-  # UI
+  # Interface
   cupertino_icons: ^1.0.6
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  file_picker: ^8.3.7
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -40,7 +47,7 @@ dev_dependencies:
 
   flutter_lints: ^3.0.2
 
-  # Code generation
+  # Geração de código
   build_runner: ^2.4.9
   freezed: ^2.5.2
   json_serializable: ^6.8.0
@@ -53,3 +60,4 @@ flutter:
 
   assets:
     - assets/
+    - assets/fonts/

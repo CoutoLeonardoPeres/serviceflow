@@ -2,5 +2,10 @@
   "SUPABASE_URL": "https://SEU_PROJECT_ID.supabase.co",
   "SUPABASE_ANON_KEY": "sua_anon_key_aqui",
   "APP_ENV": "development",
-  "APP_LOG_LEVEL": "debug"
+  "APP_LOG_LEVEL": "debug",
+  "BILLING_PORTAL_URL": "",
+  "CHECKOUT_STARTER_URL": "",
+  "CHECKOUT_PROFESSIONAL_URL": "",
+  "CHECKOUT_BUSINESS_URL": "",
+  "CHECKOUT_ENTERPRISE_URL": ""
 }
