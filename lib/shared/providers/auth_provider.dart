@@ -3,9 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_provider.dart';
 
 /// Stream da sessão atual do Supabase Auth.
-final authStateProvider = StreamProvider<AuthState>((ref) {
+final authStateProvider = StreamProvider<AuthState>((ref) async* {
   final client = ref.watch(supabaseClientProvider);
-  return client.auth.onAuthStateChange;
+  yield AuthState(AuthChangeEvent.initialSession, client.auth.currentSession);
+  yield* client.auth.onAuthStateChange;
 });
 
 /// Usuário autenticado atual (null se não logado).

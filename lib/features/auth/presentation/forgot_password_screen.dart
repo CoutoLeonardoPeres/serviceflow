@@ -14,7 +14,7 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
-  final _formKey  = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   bool _sent = false;
 
@@ -43,8 +43,6 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       }
     });
 
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Recuperar senha'),
@@ -55,12 +53,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
-            child: _sent ? _SuccessView() : _FormView(
-              formKey: _formKey,
-              emailCtrl: _emailCtrl,
-              isLoading: isLoading,
-              onSubmit: _submit,
-            ),
+            child: _sent
+                ? _SuccessView()
+                : _FormView(
+                    formKey: _formKey,
+                    emailCtrl: _emailCtrl,
+                    isLoading: isLoading,
+                    onSubmit: _submit,
+                  ),
           ),
         ),
       ),

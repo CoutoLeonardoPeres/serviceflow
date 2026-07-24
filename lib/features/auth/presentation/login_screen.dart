@@ -2,13 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/error/app_error.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/widgets/neomorphic.dart';
 import '../application/auth_notifier.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({
+    super.key,
+    this.inviteToken,
+    this.tenantSlug,
+  });
+
+  final String? inviteToken;
+  final String? tenantSlug;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -17,7 +25,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
-  final _passCtrl  = TextEditingController();
+  final _passCtrl = TextEditingController();
   bool _obscurePass = true;
 
   @override
@@ -32,6 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     await ref.read(authNotifierProvider.notifier).signInWithEmail(
           _emailCtrl.text,
           _passCtrl.text,
+          inviteToken: widget.inviteToken,
         );
   }
 
@@ -53,59 +62,119 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           );
         ref.read(authNotifierProvider.notifier).resetState();
+      } else if (next is AuthActionSuccess && next.message != null) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(next.message!),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        ref.read(authNotifierProvider.notifier).resetState();
       }
     });
 
     final colorScheme = Theme.of(context).colorScheme;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isWide = screenWidth > 600;
+    final hasInvite =
+        widget.inviteToken != null && widget.inviteToken!.trim().isNotEmpty;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerLowest,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: isWide ? 0 : 24,
-            vertical: 32,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Card(
-              elevation: isWide ? 1 : 0,
-              child: Padding(
-                padding: const EdgeInsets.all(32),
+      body: NeomorphicBackdrop(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(
+              horizontal: isWide ? 32 : 24,
+              vertical: 32,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: NeomorphicPanel(
+                borderRadius: 34,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.surfaceRaised,
+                    AppColors.surfaceCanvas,
+                  ],
+                ),
+                padding: const EdgeInsets.fromLTRB(34, 34, 34, 30),
                 child: Form(
                   key: _formKey,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // ── Logo / Título ──
-                      Icon(
-                        Icons.electrical_services_rounded,
-                        size: 48,
-                        color: colorScheme.primary,
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: NeomorphicInset(
+                          borderRadius: 22,
+                          padding: const EdgeInsets.all(14),
+                          color: AppColors.surfaceCanvas,
+                          child: Container(
+                            width: 54,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  colorScheme.primary,
+                                  AppColors.aquaPulse.withValues(alpha: 0.92),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Icon(
+                              Icons.electrical_services_rounded,
+                              size: 28,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 24),
                       Text(
                         'ServiceFlow',
                         style: Theme.of(context)
                             .textTheme
-                            .headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                        textAlign: TextAlign.center,
+                            .displayMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       Text(
-                        'Gestão de serviços técnicos',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                        textAlign: TextAlign.center,
+                        'Entre para continuar a operação da sua equipe com agilidade e controle.',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: AppColors.inkMuted,
+                                  fontWeight: FontWeight.w500,
+                                ),
                       ),
-                      const SizedBox(height: 32),
-
-                      // ── E-mail ──
+                      const SizedBox(height: 18),
+                      if (hasInvite) ...[
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: NeomorphicBadge(
+                            icon: Icons.mail_lock_outlined,
+                            label: widget.tenantSlug == null ||
+                                    widget.tenantSlug!.trim().isEmpty
+                                ? 'Você está entrando por convite'
+                                : 'Convite para ${widget.tenantSlug}',
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: NeomorphicBadge(
+                          icon: Icons.verified_user_outlined,
+                          label: 'Acesso seguro por e-mail e senha',
+                        ),
+                      ),
+                      const SizedBox(height: 28),
                       TextFormField(
                         controller: _emailCtrl,
                         keyboardType: TextInputType.emailAddress,
@@ -118,9 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         validator: validateEmail,
                       ),
-                      const SizedBox(height: 16),
-
-                      // ── Senha ──
+                      const SizedBox(height: 18),
                       TextFormField(
                         controller: _passCtrl,
                         obscureText: _obscurePass,
@@ -145,9 +212,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         validator: validatePassword,
                       ),
-                      const SizedBox(height: 8),
-
-                      // ── Esqueci senha ──
+                      const SizedBox(height: 10),
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
@@ -157,9 +222,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: const Text('Esqueci minha senha'),
                         ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // ── Botão entrar ──
+                      const SizedBox(height: 18),
                       ElevatedButton(
                         onPressed: isLoading ? null : _submit,
                         child: isLoading

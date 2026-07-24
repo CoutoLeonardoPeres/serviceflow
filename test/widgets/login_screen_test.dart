@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:serviceflow/features/auth/presentation/login_screen.dart';
 import 'package:serviceflow/features/auth/application/auth_notifier.dart';
+import 'package:serviceflow/core/widgets/neomorphic.dart';
 import 'package:serviceflow/core/theme/app_theme.dart';
 
 /// Helper: envolve o widget em MaterialApp + GoRouter + ProviderScope para teste.
@@ -12,7 +13,9 @@ Widget _wrapInApp(Widget child, {List<Override> overrides = const []}) {
   final router = GoRouter(
     routes: [
       GoRoute(path: '/', builder: (_, __) => child),
-      GoRoute(path: '/esqueci-senha', builder: (_, __) => const Scaffold(body: Text('Esqueci senha'))),
+      GoRoute(
+          path: '/esqueci-senha',
+          builder: (_, __) => const Scaffold(body: Text('Esqueci senha'))),
     ],
   );
   return ProviderScope(
@@ -34,9 +37,11 @@ void main() {
       expect(find.text('Senha'), findsOneWidget);
       expect(find.text('Entrar'), findsOneWidget);
       expect(find.text('Esqueci minha senha'), findsOneWidget);
+      expect(find.byType(NeomorphicPanel), findsWidgets);
     });
 
-    testWidgets('exibe erro ao tentar submeter com campos vazios', (tester) async {
+    testWidgets('exibe erro ao tentar submeter com campos vazios',
+        (tester) async {
       await tester.pumpWidget(_wrapInApp(const LoginScreen()));
       await tester.pump();
 

@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/error/app_error.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/supabase_provider.dart';
+import '../../../shared/providers/tenant_provider.dart';
 
 /// Estado do notifier de auth.
 sealed class AuthActionState {
@@ -36,19 +38,87 @@ class AuthNotifier extends Notifier<AuthActionState> {
   SupabaseClient get _client => ref.read(supabaseClientProvider);
 
   /// Login com e-mail e senha.
-  Future<void> signInWithEmail(String email, String password) async {
+  Future<void> signInWithEmail(
+    String email,
+    String password, {
+    String? inviteToken,
+  }) async {
     state = const AuthActionLoading();
     try {
       await _client.auth.signInWithPassword(
         email: email.trim(),
         password: password,
       );
-      state = const AuthActionSuccess();
+      if (inviteToken != null && inviteToken.trim().isNotEmpty) {
+        try {
+          await _client.rpc(
+            'accept_tenant_invitation',
+            params: {'p_token': inviteToken.trim()},
+          );
+        } on PostgrestException catch (e) {
+          await _client.auth.signOut();
+          ref
+            ..invalidate(authStateProvider)
+            ..invalidate(activeMembershipProvider);
+          state = AuthActionError(_mapInviteException(e));
+          return;
+        }
+      }
+      ref
+        ..invalidate(authStateProvider)
+        ..invalidate(activeMembershipProvider);
+      state = AuthActionSuccess(
+        inviteToken != null && inviteToken.trim().isNotEmpty
+            ? 'Convite aceito com sucesso.'
+            : null,
+      );
     } on AuthException catch (e) {
       state = AuthActionError(_mapAuthException(e));
     } catch (_) {
       state = const AuthActionError(
         UnexpectedError('Não foi possível conectar. Tente novamente.'),
+      );
+    }
+  }
+
+  Future<void> signUpFromInvitation({
+    required String fullName,
+    required String email,
+    required String password,
+    required String inviteToken,
+  }) async {
+    state = const AuthActionLoading();
+    try {
+      final signUpResult = await _client.auth.signUp(
+        email: email.trim(),
+        password: password,
+        data: {'full_name': fullName.trim()},
+      );
+
+      if (signUpResult.session == null) {
+        await _client.auth.signInWithPassword(
+          email: email.trim(),
+          password: password,
+        );
+      }
+
+      await _client.rpc(
+        'accept_tenant_invitation',
+        params: {'p_token': inviteToken.trim()},
+      );
+
+      ref
+        ..invalidate(authStateProvider)
+        ..invalidate(activeMembershipProvider);
+      state =
+          const AuthActionSuccess('Conta criada e convite aceito com sucesso.');
+    } on AuthException catch (e) {
+      state = AuthActionError(_mapSignUpException(e));
+    } on PostgrestException catch (e) {
+      state = AuthActionError(_mapInviteException(e));
+    } catch (_) {
+      state = const AuthActionError(
+        UnexpectedError('Não foi possível concluir o primeiro acesso.'),
       );
     }
   }
@@ -92,6 +162,9 @@ class AuthNotifier extends Notifier<AuthActionState> {
     state = const AuthActionLoading();
     try {
       await _client.auth.signOut();
+      ref
+        ..invalidate(authStateProvider)
+        ..invalidate(activeMembershipProvider);
       state = const AuthActionIdle();
     } catch (_) {
       state = const AuthActionIdle(); // logout falhou mas limpamos estado local
@@ -120,6 +193,33 @@ class AuthNotifier extends Notifier<AuthActionState> {
       return const AuthError('E-mail ou senha inválidos.');
     }
     return const AuthError('Erro de autenticação. Tente novamente.');
+  }
+
+  AppError _mapInviteException(PostgrestException e) {
+    if (e.code == '22023') {
+      return const ValidationError('Convite inválido.');
+    }
+    if (e.code == 'P0001' || e.code == 'P0002') {
+      return BusinessRuleError(e.message);
+    }
+    return const AuthError(
+      'Não foi possível aceitar o convite com este login.',
+    );
+  }
+
+  AppError _mapSignUpException(AuthException e) {
+    final msg = e.message.toLowerCase();
+    if (msg.contains('already registered') ||
+        msg.contains('already been registered') ||
+        msg.contains('user already registered')) {
+      return const AuthError(
+        'Este e-mail já possui conta. Entre com sua senha para aceitar o convite.',
+      );
+    }
+    if (msg.contains('password')) {
+      return const ValidationError('Senha inválida.');
+    }
+    return const AuthError('Não foi possível criar a conta.');
   }
 }
 

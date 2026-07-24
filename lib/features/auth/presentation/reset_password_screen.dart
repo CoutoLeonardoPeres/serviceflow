@@ -17,8 +17,8 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
-  final _formKey    = GlobalKey<FormState>();
-  final _passCtrl   = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   bool _obscure1 = true;
   bool _obscure2 = true;
@@ -87,8 +87,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                         icon: Icon(_obscure1
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined),
-                        onPressed: () =>
-                            setState(() => _obscure1 = !_obscure1),
+                        onPressed: () => setState(() => _obscure1 = !_obscure1),
                       ),
                     ),
                     validator: validatePassword,
@@ -109,8 +108,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                         icon: Icon(_obscure2
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined),
-                        onPressed: () =>
-                            setState(() => _obscure2 = !_obscure2),
+                        onPressed: () => setState(() => _obscure2 = !_obscure2),
                       ),
                     ),
                     validator: (v) {

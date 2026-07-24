@@ -41,7 +41,8 @@ void main() {
 
   group('validateCnpj', () {
     test('aceita CNPJ válido', () {
-      expect(validateCnpj('11.222.333/0001-81'), isNull); // CNPJ de teste válido
+      expect(
+          validateCnpj('11.222.333/0001-81'), isNull); // CNPJ de teste válido
     });
     test('rejeita CNPJ inválido', () {
       expect(validateCnpj('00.000.000/0000-00'), isNotNull);
@@ -58,8 +59,8 @@ void main() {
     });
     test('rejeita slugs inválidos', () {
       expect(validateSlug(''), isNotNull);
-      expect(validateSlug('a'), isNotNull);        // muito curto
-      expect(validateSlug('AB'), isNotNull);        // maiúsculas
+      expect(validateSlug('a'), isNotNull); // muito curto
+      expect(validateSlug('AB'), isNotNull); // maiúsculas
       expect(validateSlug('empresa_alpha'), isNotNull); // underscore
       expect(validateSlug('-começa-com-hífen'), isNotNull);
     });
@@ -79,9 +80,9 @@ void main() {
   group('validatePhone', () {
     test('aceita telefones válidos', () {
       expect(validatePhone('(11) 98765-4321'), isNull);
-      expect(validatePhone('1198765432'), isNull);  // 10 dígitos (fixo)
-      expect(validatePhone(null), isNull);           // opcional
-      expect(validatePhone(''), isNull);             // opcional
+      expect(validatePhone('1198765432'), isNull); // 10 dígitos (fixo)
+      expect(validatePhone(null), isNull); // opcional
+      expect(validatePhone(''), isNull); // opcional
     });
     test('rejeita telefone com dígitos insuficientes', () {
       expect(validatePhone('123'), isNotNull);

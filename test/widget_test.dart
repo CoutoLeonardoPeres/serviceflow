@@ -1,19 +1,36 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:serviceflow/core/router/app_router.dart';
 import 'package:serviceflow/main.dart';
 
 void main() {
   testWidgets(
-    'exibe a tela inicial do ServiceFlow',
+    'ServiceFlowApp renderiza rota configurada',
     (WidgetTester tester) async {
-      await tester.pumpWidget(const ServiceFlowApp());
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, __) => const Scaffold(
+              body: Text('ServiceFlow'),
+            ),
+          ),
+        ],
+      );
 
-      expect(
-        find.text('ServiceFlow'),
-        findsOneWidget,
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appRouterProvider.overrideWithValue(router),
+          ],
+          child: const ServiceFlowApp(),
+        ),
       );
 
       expect(
-        find.text('ServiceFlow iniciado com sucesso!'),
+        find.text('ServiceFlow'),
         findsOneWidget,
       );
     },
