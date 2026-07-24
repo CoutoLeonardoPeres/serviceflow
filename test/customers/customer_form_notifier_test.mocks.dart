@@ -82,6 +82,26 @@ class MockCustomerRepository extends _i1.Mock
   }
 
   @override
+  _i7.Future<({Set<String> documents, Set<String> phones})>
+      findExistingDocumentAndPhoneConflicts({
+    Set<String>? documents = const {},
+    Set<String>? phones = const {},
+  }) =>
+          (super.noSuchMethod(
+            Invocation.method(
+              #findExistingDocumentAndPhoneConflicts,
+              [],
+              {
+                #documents: documents,
+                #phones: phones,
+              },
+            ),
+            returnValue:
+                _i7.Future<({Set<String> documents, Set<String> phones})>.value(
+                    (documents: <String>{}, phones: <String>{})),
+          ) as _i7.Future<({Set<String> documents, Set<String> phones})>);
+
+  @override
   _i7.Future<({List<_i2.Customer> items, int totalCount})> listPaged({
     _i6.CustomerFilter? filter = const _i6.CustomerFilter(),
     int? page = 0,
