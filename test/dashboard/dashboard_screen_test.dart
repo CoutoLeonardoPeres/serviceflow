@@ -58,6 +58,10 @@ void main() {
 
     expect(find.text('Resumo financeiro'), findsOneWidget);
     expect(find.text('Saldo em aberto'), findsOneWidget);
+    // DIAGNÓSTICO TEMPORÁRIO: confirma se o override de
+    // currentTenantPlanProvider está realmente sendo aplicado (deveria
+    // mostrar o label "Enterprise" no card de plano atual).
+    expect(find.text('Enterprise'), findsOneWidget);
     expect(find.text('Financeiro'), findsWidgets);
   });
 }
