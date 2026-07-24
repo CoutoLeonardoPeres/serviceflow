@@ -1,5 +1,32 @@
 # Changelog
 
+## [F2 — Preparação da publicação em staging] — 2026-07-24
+
+### Adicionado
+
+- `dart_defines/staging.json` criado (gitignored), reaproveitando `SUPABASE_URL`/
+  `SUPABASE_ANON_KEY` do projeto `Service_Saas` já usado em desenvolvimento —
+  decisão registrada: staging usa o mesmo projeto Supabase de dev, não um
+  projeto isolado, por escolha explícita do usuário.
+- `docs/FASE2_RUNBOOK_STAGING.md`: runbook completo de T2.1 a T2.5 (build,
+  publicação manual via Gerenciador de Arquivos da Hostinger, smoke test
+  remoto, backup do banco, checklist DNS/HTTPS), com checklist de saída.
+
+### Alterado
+
+- `docs/DEPLOY_STAGING.md`, `docs/MVP_RELEASE_CHECK.md`,
+  `docs/RELEASE_NOTES_MVP.md`: URL de staging genérica (`<url-staging>` /
+  `staging.seudominio.com`) substituída pela URL real
+  `https://cliente.leonardoperescouto.com`; contagem de migrations corrigida
+  de `0001-0013` (desatualizada) para `0001-0035`.
+
+### Observação
+
+Publicação real não foi executada — depende de Flutter local (build) e do
+Gerenciador de Arquivos da Hostinger (upload manual, fora do alcance do
+sandbox de análise). Como staging compartilha o banco com dev, a Fase 1
+(isolamento RLS) deve ser concluída antes de publicar.
+
 ## [F1 — Preparação da validação de segurança RLS] — 2026-07-24
 
 ### Adicionado

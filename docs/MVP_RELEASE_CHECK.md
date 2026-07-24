@@ -50,6 +50,6 @@ Também executado com sucesso:
 
 ## Pendente Externo
 
-- Publicar o pacote na Hostinger.
-- Rodar `./scripts/smoke_web.sh <url-staging>` contra a URL real.
-- Executar os roteiros SQL de isolamento com usuários reais.
+- Publicar o pacote na Hostinger em `https://cliente.leonardoperescouto.com`.
+- Rodar `./scripts/smoke_web.sh https://cliente.leonardoperescouto.com` contra a URL real.
+- Executar os roteiros SQL de isolamento com usuários reais (ver `docs/FASE1_RUNBOOK_SEGURANCA_RLS.md`).

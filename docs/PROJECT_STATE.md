@@ -1,12 +1,12 @@
 # ServiceFlow — Estado do Projeto
 
-**Última atualização:** 2026-07-24 · **Entrega atual concluída:** F0 (Higiene técnica pré-produção, parcial) · **Entrega em andamento:** F1 (Validação de segurança RLS)
+**Última atualização:** 2026-07-24 · **Entrega atual concluída:** F0 (Higiene técnica pré-produção) e preparação de F1/F2 · **Entrega em andamento:** F1 (Validação de segurança RLS) — bloqueia F2/F3
 
 ## Status
 
 | Item | Estado |
 |---|---|
-| Fase | F0/F1 — Higiene técnica concluída; validação de segurança RLS é o próximo bloqueador do MVP |
+| Fase | F0 concluída; F1 (RLS) e F2 (staging) preparadas e documentadas, execução real pendente do usuário |
 | Código Flutter | ✅ features/customers + features/service_requests + features/scheduling + features/professionals + features/quotations + features/work_orders + features/financials + features/reports + features/settings + features/modules + features/promotions |
 | Migrations | ✅ 0001 a 0035 versionadas no repositório, sequência contígua sem duplicidade (colisão de prefixo `0034` corrigida em 2026-07-24) |
 | Ambientes | ⏳ Requer `dart_defines/dev.json` com credenciais reais (arquivo local, fora do Git) |
@@ -17,7 +17,7 @@
 | Documentação | ✅ Fundação, manuais de reconstrução, SQL, deploy, release, convites, estado do projeto e relatório técnico de auditoria (2026-07-24) atualizados |
 | Git | ✅ **Resolvido em 2026-07-24**: `.git/index.lock` era um lock órfão no mount FUSE do diretório de trabalho (não removível por `rm`, mas contornável por `mv` no mesmo diretório). Todo o trabalho de E4 até F2 (156 mudanças pendentes) foi dividido em 28 commits lógicos e coesos por feature/migration/docs. `git status` limpo. |
 | PII / dados sensíveis | ⚠️ **Achado em 2026-07-24**: `scripts/import_customers_eletroceu_20260722.sql` e `docs/imports/clientes_vcf_preview_2026-07-23.csv` continham dados reais de clientes (nome, CPF, e-mail, telefone, endereço) de um tenant real. Ambos foram **excluídos do Git** e adicionados ao `.gitignore`. Arquivos permanecem no disco local, fora do controle de versão. |
-| Deploy | ⏳ Pacote e smoke test prontos; publicação Hostinger depende de acesso externo |
+| Deploy | ⏳ **Preparado em 2026-07-24**: `dart_defines/staging.json` criado (mesmo projeto Supabase `Service_Saas` da dev, decisão registrada), URL de staging definida (`https://cliente.leonardoperescouto.com`), runbook completo em `docs/FASE2_RUNBOOK_STAGING.md`. Build/publicação/smoke test remoto dependem de execução local (Flutter + Gerenciador de Arquivos da Hostinger, ambos fora do alcance deste sandbox de análise). |
 
 ## Estrutura do repositório
 

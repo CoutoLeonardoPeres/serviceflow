@@ -5,8 +5,9 @@
 - Data: 2026-07-22
 - Pacote local validado: `dist/serviceflow-staging-dry-run.zip`
 - Manifesto: `dist/serviceflow-staging-dry-run.manifest.txt`
-- Supabase remoto: `Service_Saas`
-- Migrations aplicadas: `0001` a `0013`
+- Supabase remoto: `Service_Saas` (`pkbluscdssiiumrppmwa`) — mesmo projeto usado em desenvolvimento e staging
+- Migrations aplicadas: `0001` a `0035`
+- URL de staging: `https://cliente.leonardoperescouto.com`
 
 ## Funcionalidades Entregues
 
@@ -43,10 +44,10 @@ Para gerar o pacote definitivo com credenciais de staging:
 
 ## Pendências Antes de Considerar MVP Aceito
 
-- Criar/preencher `dart_defines/staging.json` com credenciais reais de staging.
-- Publicar `dist/serviceflow-staging.zip` na Hostinger.
-- Rodar `./scripts/smoke_web.sh <url-staging>`.
-- Executar roteiros SQL de isolamento com usuários reais.
+- `dart_defines/staging.json` já criado em 2026-07-24 com credenciais reais de staging.
+- Publicar `dist/serviceflow-staging.zip` na Hostinger em `https://cliente.leonardoperescouto.com`.
+- Rodar `./scripts/smoke_web.sh https://cliente.leonardoperescouto.com`.
+- Executar roteiros SQL de isolamento com usuários reais (ver `docs/FASE1_RUNBOOK_SEGURANCA_RLS.md`).
 - Fazer validação manual ponta a ponta: cliente → chamado → agenda → orçamento → link público → aprovação → OS → execução → cobrança → pagamento → recibo.
 
 ## Rollback
