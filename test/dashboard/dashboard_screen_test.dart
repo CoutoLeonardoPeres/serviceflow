@@ -62,6 +62,16 @@ void main() {
     // currentTenantPlanProvider está realmente sendo aplicado (deveria
     // mostrar o label "Enterprise" no card de plano atual).
     expect(find.text('Enterprise'), findsOneWidget);
+
+    // DIAGNÓSTICO TEMPORÁRIO: lista todos os textos realmente renderizados
+    // na árvore de widgets, para descobrir por que "Financeiro" não aparece.
+    final allTexts = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.data)
+        .toList();
+    // ignore: avoid_print
+    print('=== TEXTOS ENCONTRADOS NA ARVORE: $allTexts ===');
+
     expect(find.text('Financeiro'), findsWidgets);
   });
 }
