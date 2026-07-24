@@ -15,6 +15,10 @@ dart_defines/*.json
 # ── Dados reais de clientes (PII) — nunca versionar ──────────────────────────
 scripts/import_customers_*.sql
 docs/imports/
+
+# ── Testes de isolamento gerados com UUIDs reais — nunca versionar ──────────
+test/_generated/
+test_results_isolation_*.txt
 *.pyc
 *.swp
 .DS_Store
