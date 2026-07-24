@@ -170,6 +170,25 @@ BEGIN
   RAISE NOTICE 'PASSOU T9: mesmo documento em tenant diferente é permitido';
 
   -- ─────────────────────────────────────────────────────────────────────────
+  -- T9B: phone único por tenant — duplicata deve falhar
+  -- ─────────────────────────────────────────────────────────────────────────
+  INSERT INTO customers (tenant_id, type, name, phone, is_active)
+  VALUES (:'TENANT_ALPHA', 'company', 'Empresa Fone A', '11999999999', true);
+
+  BEGIN
+    INSERT INTO customers (tenant_id, type, name, phone, is_active)
+    VALUES (:'TENANT_ALPHA', 'company', 'Empresa Fone B', '11999999999', true);
+    RAISE EXCEPTION 'FALHOU T9B: inserção de telefone duplicado não foi bloqueada';
+  EXCEPTION
+    WHEN unique_violation THEN
+      RAISE NOTICE 'PASSOU T9B: telefone duplicado no mesmo tenant foi bloqueado';
+  END;
+
+  INSERT INTO customers (tenant_id, type, name, phone, is_active)
+  VALUES (:'TENANT_BETA', 'company', 'Empresa Fone Beta', '11999999999', true);
+  RAISE NOTICE 'PASSOU T9C: mesmo telefone em tenant diferente é permitido';
+
+  -- ─────────────────────────────────────────────────────────────────────────
   -- T10: is_primary único por customer (apenas um contato principal)
   -- ─────────────────────────────────────────────────────────────────────────
   INSERT INTO customer_contacts (tenant_id, customer_id, name, is_primary)
