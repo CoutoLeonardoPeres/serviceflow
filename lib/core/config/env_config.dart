@@ -7,13 +7,24 @@ enum AppEnvironment { development, staging, production }
 class EnvConfig {
   EnvConfig._();
 
+  static const String _devSupabaseUrl =
+      'https://pkbluscdssiiumrppmwa.supabase.co';
+  static const String _devSupabaseAnonKey =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBrYmx1c2Nkc3NpaXVtcnBwbXdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDEyMzIsImV4cCI6MjEwMDIxNzIzMn0.twkw2ZsDOc6kmQ97OdsCi2AFXjUOPZKTx8PJACTVYxI';
+
   // ── Supabase ────────────────────────────────────────────────────────────────
   /// URL pública do projeto Supabase (ex: https://abcd.supabase.co).
-  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const String _supabaseUrlFromEnv =
+      String.fromEnvironment('SUPABASE_URL');
+  static String get supabaseUrl =>
+      _supabaseUrlFromEnv.isNotEmpty ? _supabaseUrlFromEnv : _devSupabaseUrl;
 
   /// Anon/publishable key — segura para uso no cliente. NÃO é a service_role.
-  static const String supabaseAnonKey =
+  static const String _supabaseAnonKeyFromEnv =
       String.fromEnvironment('SUPABASE_ANON_KEY');
+  static String get supabaseAnonKey => _supabaseAnonKeyFromEnv.isNotEmpty
+      ? _supabaseAnonKeyFromEnv
+      : _devSupabaseAnonKey;
 
   // ── Ambiente ────────────────────────────────────────────────────────────────
   static const String _envString =
@@ -30,10 +41,36 @@ class EnvConfig {
     }
   }
 
-  static bool get isDevelopment =>
-      environment == AppEnvironment.development;
-  static bool get isProduction =>
-      environment == AppEnvironment.production;
+  static bool get isDevelopment => environment == AppEnvironment.development;
+  static bool get isProduction => environment == AppEnvironment.production;
+
+  // ── Cobrança / Checkout ────────────────────────────────────────────────────
+  static const String _billingPortalUrlFromEnv =
+      String.fromEnvironment('BILLING_PORTAL_URL');
+  static String? get billingPortalUrl => _billingPortalUrlFromEnv.trim().isEmpty
+      ? null
+      : _billingPortalUrlFromEnv.trim();
+
+  static const String _starterCheckoutUrlFromEnv =
+      String.fromEnvironment('CHECKOUT_STARTER_URL');
+  static const String _professionalCheckoutUrlFromEnv =
+      String.fromEnvironment('CHECKOUT_PROFESSIONAL_URL');
+  static const String _businessCheckoutUrlFromEnv =
+      String.fromEnvironment('CHECKOUT_BUSINESS_URL');
+  static const String _enterpriseCheckoutUrlFromEnv =
+      String.fromEnvironment('CHECKOUT_ENTERPRISE_URL');
+
+  static String? checkoutUrlForPlan(String planKey) {
+    final raw = switch (planKey) {
+      'starter' => _starterCheckoutUrlFromEnv,
+      'professional' => _professionalCheckoutUrlFromEnv,
+      'business' => _businessCheckoutUrlFromEnv,
+      'enterprise' => _enterpriseCheckoutUrlFromEnv,
+      _ => '',
+    }
+        .trim();
+    return raw.isEmpty ? null : raw;
+  }
 
   // ── Validação na inicialização ──────────────────────────────────────────────
   static void validate() {

@@ -15,8 +15,8 @@ Future<void> main() async {
   EnvConfig.validate();
 
   await Supabase.initialize(
-    url:     EnvConfig.supabaseUrl,
-    anonKey: EnvConfig.supabaseAnonKey,
+    url: EnvConfig.supabaseUrl,
+    publishableKey: EnvConfig.supabaseAnonKey,
   );
 
   runApp(
@@ -35,7 +35,7 @@ class ServiceFlowApp extends ConsumerWidget {
       title: 'ServiceFlow',
       debugShowCheckedModeBanner: false,
 
-      theme:     AppTheme.light,
+      theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.light,
 

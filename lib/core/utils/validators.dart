@@ -38,7 +38,7 @@ String? validateCnpj(String? value) {
   const weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
   const weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
 
-  int _calc(List<int> weights) {
+  int calc(List<int> weights) {
     int sum = 0;
     for (int i = 0; i < weights.length; i++) {
       sum += int.parse(digits[i]) * weights[i];
@@ -47,8 +47,8 @@ String? validateCnpj(String? value) {
     return r < 2 ? 0 : 11 - r;
   }
 
-  if (_calc(weights1) != int.parse(digits[12])) return 'CNPJ inválido.';
-  if (_calc(weights2) != int.parse(digits[13])) return 'CNPJ inválido.';
+  if (calc(weights1) != int.parse(digits[12])) return 'CNPJ inválido.';
+  if (calc(weights2) != int.parse(digits[13])) return 'CNPJ inválido.';
 
   return null;
 }
@@ -56,7 +56,7 @@ String? validateCnpj(String? value) {
 // ── E-mail ───────────────────────────────────────────────────────────────────
 String? validateEmail(String? value) {
   if (value == null || value.trim().isEmpty) return 'Informe o e-mail.';
-  final re = RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-zA-Z]{2,}$');
+  final re = RegExp(r'^[\w.+\-]+@([\w\-]+\.)+[a-zA-Z]{2,}$');
   if (!re.hasMatch(value.trim())) return 'E-mail inválido.';
   return null;
 }

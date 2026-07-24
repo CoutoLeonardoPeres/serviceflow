@@ -53,12 +53,18 @@ class EmptyView extends StatelessWidget {
     required this.message,
     this.action,
     this.actionLabel,
+    this.actionWidget,
     this.icon = Icons.inbox_outlined,
   });
 
   final String message;
+
+  /// Callback + label: exibe um FilledButton.
   final VoidCallback? action;
   final String? actionLabel;
+
+  /// Widget personalizado de ação (alternativa a action+actionLabel).
+  final Widget? actionWidget;
   final IconData icon;
 
   @override
@@ -79,7 +85,10 @@ class EmptyView extends StatelessWidget {
                   ),
               textAlign: TextAlign.center,
             ),
-            if (action != null && actionLabel != null) ...[
+            if (actionWidget != null) ...[
+              const SizedBox(height: 24),
+              actionWidget!,
+            ] else if (action != null && actionLabel != null) ...[
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: action,

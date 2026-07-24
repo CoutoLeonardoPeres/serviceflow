@@ -12,12 +12,14 @@ sealed class AppError implements Exception {
 
 /// Erro de autenticação (credenciais, sessão expirada, etc.).
 final class AuthError extends AppError {
-  const AuthError([super.userMessage = 'Erro de autenticação. Tente novamente.']);
+  const AuthError(
+      [super.userMessage = 'Erro de autenticação. Tente novamente.']);
 }
 
 /// Erro de autorização (sem permissão para a ação).
 final class PermissionError extends AppError {
-  const PermissionError([super.userMessage = 'Você não tem permissão para esta ação.']);
+  const PermissionError(
+      [super.userMessage = 'Você não tem permissão para esta ação.']);
 }
 
 /// Recurso não encontrado.
@@ -32,7 +34,9 @@ final class BusinessRuleError extends AppError {
 
 /// Erro de conectividade ou timeout.
 final class NetworkError extends AppError {
-  const NetworkError([super.userMessage = 'Sem conexão. Verifique sua internet e tente novamente.']);
+  const NetworkError(
+      [super.userMessage =
+          'Sem conexão. Verifique sua internet e tente novamente.']);
 }
 
 /// Erro de validação (formulário, dados).
