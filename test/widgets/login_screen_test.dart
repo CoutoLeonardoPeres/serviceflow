@@ -27,9 +27,22 @@ Widget _wrapInApp(Widget child, {List<Override> overrides = const []}) {
   );
 }
 
+/// O formulário de login fica dentro de um SingleChildScrollView; no
+/// tamanho de tela padrão do flutter_test (800x600) o botão "Entrar" pode
+/// ficar fora da área visível, fazendo tester.tap() "errar" o alvo (o
+/// widget existe na árvore, mas seu Offset renderizado cai fora do
+/// viewport). Aumentamos o viewport antes do pump para evitar isso.
+void _enlargeTestViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1200, 1400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 void main() {
   group('LoginScreen — estrutura', () {
     testWidgets('exibe campos de e-mail e senha', (tester) async {
+      _enlargeTestViewport(tester);
       await tester.pumpWidget(_wrapInApp(const LoginScreen()));
       await tester.pump();
 
@@ -42,6 +55,7 @@ void main() {
 
     testWidgets('exibe erro ao tentar submeter com campos vazios',
         (tester) async {
+      _enlargeTestViewport(tester);
       await tester.pumpWidget(_wrapInApp(const LoginScreen()));
       await tester.pump();
 
@@ -53,6 +67,7 @@ void main() {
     });
 
     testWidgets('rejeita e-mail inválido', (tester) async {
+      _enlargeTestViewport(tester);
       await tester.pumpWidget(_wrapInApp(const LoginScreen()));
       await tester.pump();
 
@@ -67,6 +82,7 @@ void main() {
     });
 
     testWidgets('botão desabilitado durante loading', (tester) async {
+      _enlargeTestViewport(tester);
       // Override para manter estado Loading
       final container = ProviderContainer(overrides: [
         authNotifierProvider.overrideWith(() => _LoadingAuthNotifier()),
