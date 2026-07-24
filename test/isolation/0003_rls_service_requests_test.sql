@@ -11,12 +11,12 @@
 
 \set ON_ERROR_STOP on
 
-\set TENANT_ALPHA  'alpha-tenant-uuid-0001'
-\set TENANT_BETA   'beta-tenant-uuid-0002'
-\set USER_ALPHA    'alpha-owner-uuid-0001'
-\set USER_BETA     'beta-owner-uuid-0002'
-\set USER_TECH     'alpha-tech-uuid-0003'
-\set USER_VIEWER   'alpha-viewer-uuid-0004'
+\set TENANT_ALPHA  'a1a1a1a1-a1a1-4a1a-a1a1-a1a1a1a1a1a1'
+\set TENANT_BETA   'b2b2b2b2-b2b2-4b2b-b2b2-b2b2b2b2b2b2'
+\set USER_ALPHA    'a1000000-0000-4000-8000-000000000001'
+\set USER_BETA     'b2000000-0000-4000-8000-000000000002'
+\set USER_TECH     'a1000000-0000-4000-8000-000000000003'
+\set USER_VIEWER   'a1000000-0000-4000-8000-000000000004'
 
 DO $$
 DECLARE
