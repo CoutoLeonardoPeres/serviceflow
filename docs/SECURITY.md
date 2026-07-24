@@ -28,7 +28,11 @@ Legenda: C=criar, R=ler, U=atualizar, D=cancelar/desativar, ✱=escopo restrito.
 
 **Autenticação (Supabase Auth):** confirmação de e-mail configurável; recuperação segura; MFA preparado p/ admins; rate limit de tentativas; mensagens sem enumeração; sessões revogáveis + logout global; bloqueio de usuário via membership.status; convite com token hasheado e expirável; senha jamais em logs.
 
+No MVP, o único provedor de login interativo é e-mail e senha. OAuth social, Google, Facebook, SSO e SAML ficam fora do MVP para reduzir superfície de ataque e complexidade operacional.
+
 **Autorização:** RLS em 100% das tabelas expostas (deny by default); `has_permission(perm)` em policies e funções; tenant derivado do JWT (`current_tenant_id()` via membership ativa); anti-IDOR: UUIDs + policies; colunas sensíveis (custo, margem) via views/policies dedicadas.
+
+**Isolamento de tenants além de RLS:** projetos Supabase separados por ambiente; `tenant_id` gerado/validado server-side; testes automatizados A↛B para leitura e escrita por tabela; Storage por path de tenant com policies; funções `SECURITY DEFINER` mínimas e revisadas; auditoria para ações sensíveis; fluxo break-glass auditado para suporte de plataforma.
 
 **Entrada/saída:** validação dupla (Flutter + servidor/constraints); limites de tamanho; allowlist MIME (`image/jpeg,png,webp`, `video/mp4`, `application/pdf` + office comuns); nomes de arquivo gerados pelo sistema; download somente por URL assinada temporária; sanitização de texto exibido em páginas públicas.
 

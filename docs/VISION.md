@@ -10,6 +10,8 @@ SaaS multiempresa brasileiro para gestão do ciclo completo de atendimento e pre
 
 **Diferenciais:** fluxo comercial→operacional→financeiro integrado com rastreabilidade ponta a ponta; aprovação de orçamento por link seguro sem exigir conta do cliente; app do técnico otimizado para celular e rede instável; multiempresa com isolamento forte desde a primeira migration.
 
+**Direção de mercado do MVP:** requisitos genéricos de Field Service Management, atendendo eletricistas, encanadores, refrigeração, informática, manutenção e facilities por configuração de categorias, serviços e materiais. Especializações por vertical não entram como regra fixa no MVP.
+
 ## 2. Personas
 
 | Persona | Papel típico | Objetivo | Dor principal |
@@ -81,3 +83,5 @@ Estoque com saldo/movimentos/reservas (F3), compras/fornecedores (F3), financeir
 5. Assinatura do aceite: assinatura desenhada na tela (imagem) + metadados (data, quem, IP proporcional). Sem certificado digital no MVP.
 6. Plano/assinatura do SaaS: no MVP todo tenant é criado ativo sem cobrança (billing na F2+).
 7. Auto-cadastro de cliente por link: presente no MVP em forma simples (completar dados cadastrais).
+8. Autenticação inicial: e-mail e senha via Supabase Auth; OAuth/SSO fora do MVP.
+9. Direção visual: moderno, futurista e neomórfico, inspirado no print de referência, com acessibilidade e legibilidade acima do efeito visual.

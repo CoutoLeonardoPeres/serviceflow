@@ -71,6 +71,21 @@ isolamento real somente via SQL local.
 **Consequências:** cada entrega adiciona um arquivo `<n>_rls_<módulo>_test.sql`; exige
 Docker na pipeline de CI; setup documentado em `docs/CI_SETUP.md` (a criar na E8).
 
+## ADR-021 — Autenticação do MVP por e-mail e senha
+Contexto: login social, OAuth, SAML e SSO aumentam complexidade, configuração e superfície de ataque antes da validação do fluxo operacional.
+**Decisão:** MVP usa Supabase Auth com e-mail e senha, recuperação de senha e confirmação de e-mail configurável. MFA fica preparado para administradores, mas não obrigatório para todos no MVP.
+**Consequências:** onboarding inicial simples e previsível; integrações de identidade corporativa ficam para fase posterior sem bloquear a fundação atual.
+
+## ADR-022 — MVP genérico por vertical de serviço
+Contexto: o produto deve atender eletricistas, hidráulica, refrigeração, informática, facilities e manutenção, mas regras específicas demais atrasariam o MVP.
+**Decisão:** requisitos do MVP são genéricos de Field Service Management. Segmentos serão representados por categorias, serviços, materiais, campos descritivos e configurações por tenant, não por fluxos verticais rígidos.
+**Consequências:** menor complexidade inicial; futuras especializações podem surgir por templates, catálogos ou módulos opcionais conforme validação comercial.
+
+## ADR-023 — Direção visual moderna/neomórfica com acessibilidade obrigatória
+Contexto: foi aprovada uma referência visual moderna e futurista com neomorfismo, sombras suaves, superfícies claras e acento violeta.
+**Decisão:** adotar neomorfismo controlado na UI: fundo claro frio, painéis elevados, botões suaves, microinterações e animações curtas. Em telas operacionais, densidade, legibilidade, contraste, foco de teclado e estados claros têm prioridade sobre efeito visual.
+**Consequências:** identidade visual distinta sem sacrificar uso diário; componentes devem ser testados em desktop/mobile e com contraste adequado.
+
 ## A registrar nas próximas entregas
 - ADR-019: motor de PDF (lib Dart em Edge/Deno vs serviço) (E6).
 - ADR-020: política de custo de estoque — custo médio vs última compra (F3).

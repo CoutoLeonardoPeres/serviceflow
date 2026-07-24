@@ -1,6 +1,6 @@
 # ServiceFlow — Modelo de Dados (MVP)
 
-Convenções globais: PK `id uuid default gen_random_uuid()`; toda tabela de tenant tem `tenant_id uuid not null references tenants`, `created_at/updated_at timestamptz` (UTC, trigger), `created_by/updated_by uuid` quando aplicável; moeda `numeric(14,2)` (custo unitário `numeric(14,4)`); quantidades `numeric(12,3)`; unicidade sempre composta com `tenant_id`; RLS habilitado em todas; soft delete só onde indicado; FKs e checks explícitos; índice em todo `tenant_id` + colunas de filtro.
+Convenções globais: PK `id uuid default gen_random_uuid()`; toda tabela de tenant tem `tenant_id uuid not null references tenants`, `created_at/updated_at timestamptz` (UTC, trigger), `created_by/updated_by uuid` quando aplicável; valores monetários do MVP usam centavos inteiros (`*_cents int`) no app e no banco; quantidades usam `numeric(12,3)`; unicidade sempre composta com `tenant_id`; RLS habilitado em todas; soft delete só onde indicado; FKs e checks explícitos; índice em todo `tenant_id` + colunas de filtro.
 
 ## 1. Identidade e tenancy (F0 — migration 0001)
 
@@ -23,6 +23,8 @@ Convenções globais: PK `id uuid default gen_random_uuid()`; toda tabela de ten
 - **customer_portal_access**: customer_id, contact_id, token_hash, scope, expires_at, revoked_at, last_access_at. (auto-cadastro/portal leve.)
 - customer_notes / customer_documents: F2.
 
+Implementação F2 geolocalização: o app usa `AddressGeocoder` para preencher `customer_addresses.latitude` e `customer_addresses.longitude` a partir de CEP, rua, número, bairro, cidade e UF. Não exige nova migration porque os campos já existem no modelo F1. Essas coordenadas alimentam o cálculo local de distância do roteiro sugerido em Chamados, Orçamentos e OS.
+
 ## 3. Atendimento (F1)
 
 - **service_categories**: name, seed por segmento; **service_priorities**: name, level, sla_hours nullable.
@@ -30,6 +32,8 @@ Convenções globais: PK `id uuid default gen_random_uuid()`; toda tabela de ten
 - **service_request_status_history**: request_id, from_status, to_status, actor_id, reason, created_at.
 - **service_request_attachments**: request_id, storage_path, mime_type, size, checksum, uploaded_by. (mime allowlist; nome gerado pelo sistema.)
 - **service_request_notes**, **service_request_assignments** (histórico de atribuição).
+
+Implementação E4: migration `0003_service_requests.sql` cria as tabelas acima com RLS, histórico automático, auditoria, função `transition_service_request()` e bucket privado `service-request-attachments`.
 
 ## 4. Agenda e visita (F1)
 
@@ -39,6 +43,8 @@ Convenções globais: PK `id uuid default gen_random_uuid()`; toda tabela de ten
 - **visit_evidence**: visit_id, storage_path, kind (`photo|video|document`), checksum.
 - technician_availability, visit_checkins, visit_expenses, travel_records: F2+ (check-in no MVP fica na OS).
 
+Implementação E5: migration `0004_scheduling.sql` cria as tabelas acima com RLS, RPC `schedule_appointment()`, RPC `list_tenant_technicians()`, bloqueio transacional de conflito por técnico e criação automática de `technical_visits` para visitas vinculadas a chamados.
+
 ## 5. Orçamento (F1)
 
 - **quotations**: number por tenant, customer_id, request_id nullable, current_version_id, status (máquina §7), valid_until, requires_advance bool, advance_type (`percent|fixed`), advance_value, notes/terms/warranty_terms.
@@ -47,6 +53,8 @@ Convenções globais: PK `id uuid default gen_random_uuid()`; toda tabela de ten
 - **quotation_public_links**: quotation_id, version_id, token_hash, expires_at, revoked_at, max_uses nullable, use_count, last_access_at.
 - **quotation_approvals**: version_id, decision (`approved|rejected|change_requested`), decided_at, channel, approver_name, otp_used bool, ip, user_agent, comments. Unique parcial: uma aprovação `approved` por quotation.
 - **quotation_status_history**. quotation_taxes/discounts detalhados: representados como itens no MVP; tabelas próprias na F4 se necessário.
+
+Implementação E6: migration `0005_quotations.sql` cria `quotations`, `quotation_versions`, `quotation_items`, `quotation_public_links` e `quotation_approvals` com RLS. O RPC `create_quotation()` calcula subtotal, impostos, descontos, custo interno, margem e total no banco usando valores em centavos. A migration `0006_quotation_public_flow.sql` adiciona o fluxo público seguro: geração de token opaco com hash SHA-256, visualização pública do orçamento e registro de aprovação/rejeição/solicitação de alteração. A migration `0007_quotation_public_revoke.sql` permite revogar links públicos ativos por orçamento com validação de tenant, permissão e auditoria.
 
 ## 6. Ordem de Serviço, execução e financeiro básico (F1)
 
@@ -62,6 +70,22 @@ Convenções globais: PK `id uuid default gen_random_uuid()`; toda tabela de ten
 - **receivables**: work_order_id nullable, customer_id, description, due_date, amount, status (`open|partially_paid|paid|cancelled`), balance.
 - **payment_records** (recebimento manual MVP): receivable_id, method (`cash|pix_manual|transfer|card_machine|other`), amount, paid_at, reference (NSU etc.), fees, net_amount, received_by. Baixa via função transacional que atualiza receivable.balance.
 - **receipts**: number por tenant, work_order_id, pdf_path, checksum, version, issued_by, issued_at.
+
+Implementação E7 inicial: migration `0008_work_orders.sql` cria `work_orders`, `work_order_items`, `work_order_events` e `work_order_evidence` com RLS. O RPC `convert_approved_quotation_to_work_order()` converte apenas orçamento aprovado, espelha os itens da versão atual, garante idempotência por `quotation_id` e atualiza o chamado vinculado para `converted_to_work_order`. O RPC `transition_work_order()` registra início, pausa, conclusão e cancelamento com auditoria.
+
+Implementação E7 execução: migration `0009_work_order_execution.sql` cria `work_order_time_entries` e `work_order_materials` com RLS. Os RPCs `record_work_order_time_entry()` e `add_work_order_material()` validam tenant, permissão `work_orders.execute`, impedem alteração de OS finalizada, registram evento operacional e auditam a inclusão.
+
+Implementação E7 aceite: migration `0010_work_order_acceptance.sql` cria `work_order_acceptances` com RLS. O RPC `record_work_order_acceptance()` registra ou atualiza o aceite do cliente, conclui a OS quando necessário, cria evento operacional e gera auditoria `work_order.acceptance.recorded`.
+
+Implementação E7 despesas: migration `0011_work_order_expenses.sql` cria `work_order_expenses` com RLS. O RPC `add_work_order_expense()` valida tenant, permissão `work_orders.execute`, impede despesa em OS finalizada, registra evento operacional e gera auditoria `work_order.expense.created`.
+
+Implementação E7 evidências: migration `0012_work_order_evidence_storage.sql` cria bucket privado `work-order-evidence` no Storage, policies por tenant e RPC `record_work_order_evidence()`. O app salva fotos, vídeos, PDFs e assinaturas desenhadas em caminho `tenant_id/work_order_id/arquivo`, registra metadados em `work_order_evidence`, cria evento operacional e gera auditoria `work_order.evidence.created`.
+
+Implementação E8 financeiro mínimo: migration `0013_financials_minimum.sql` cria `receivables`, `payment_records` e `receipts` com RLS. O RPC `create_receivable_from_work_order()` gera cobrança idempotente a partir da OS, e o RPC `register_manual_payment()` faz baixa transacional, atualiza saldo/status, emite recibo numerado e gera auditoria `financial.payment.registered`.
+
+Implementação F2 satisfação: migration `0014_customer_satisfaction.sql` cria `work_order_satisfaction` com `work_order_id` único, `rating` de 1 a 5, respondente e comentário opcionais. A RPC `record_work_order_satisfaction()` valida tenant, permissão operacional, exige OS concluída, faz upsert da avaliação, registra evento na OS e auditoria `work_order.satisfaction.recorded`.
+
+Implementação F2 fotos por etapa: migration `0015_quotation_attachments.sql` cria `quotation_attachments` e bucket privado `quotation-attachments` para fotos de orçamentos. Chamados usam `service_request_attachments`/`service-request-attachments` e OS usa `work_order_evidence`/`work-order-evidence`, permitindo histórico visual de cliente, equipamento, local e serviço.
 - **generated_documents** (PDFs): entity, entity_id, version, storage_path, checksum, status, created_by. Imutável.
 
 ## 7. Catálogo (F1)

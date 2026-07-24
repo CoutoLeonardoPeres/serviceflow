@@ -9,11 +9,11 @@ Estimativas relativas: P (≤1 sessão), M (1–2), G (2–4), GG (4+).
 | 1 | Visão e arquitetura | Docs desta pasta | M | — |
 | 2 | Fundação técnica | Flutter init, pastas, tema, env, Supabase, migrations identidade+tenancy, RLS, auth (login/recuperação/convite), shell responsivo, testes de isolamento | GG | 1 |
 | 3 | Clientes | customers/contacts/addresses, validações BR (CPF/CNPJ/CEP/fone), RBAC aplicado, auditoria, testes | G | 2 |
-| 4 | Chamados | service_requests, categorias, prioridades, histórico de status, anexos (Storage+policies), atribuição, filtros server-side, testes | G | 3 |
-| 5 | Agenda e visitas | appointments, técnicos, conflito de agenda, technical_visits, testes | M | 4 |
-| 6 | Orçamentos | quotations, versões, itens, cálculo server-side, tax profile simples, PDF, link público seguro, aprovação c/ OTP opcional, testes de segurança do link | GG | 3 (4/5 desejáveis) |
-| 7 | OS e execução | conversão idempotente, execução, horas, materiais, despesas, evidências, aceite/assinatura, conclusão | GG | 6 |
-| 8 | Financeiro mínimo + deploy | receivables, payment_records, recibo PDF, dashboard mínimo, deploy staging Hostinger, smoke tests | G | 7 |
+| 4 | Chamados | service_requests, categorias, prioridades, histórico de status, anexos (Storage+policies), atribuição, filtros server-side, testes | G | 3 — concluída |
+| 5 | Agenda e visitas | appointments, técnicos, conflito de agenda, technical_visits, testes | M | 4 — concluída |
+| 6 | Orçamentos | quotations, versões, itens, cálculo server-side, PDF, link público seguro, aprovação pública e revogação manual implementados; execução do teste SQL específico com usuários reais pendente | GG | 3 (4/5 desejáveis) — base concluída |
+| 7 | OS e execução | work_orders, itens espelhados, eventos, evidências, lista, criação em popup, detalhe, transição de execução, conversão idempotente de orçamento aprovado, registro de horas, materiais, despesas, anexos reais no Storage e aceite com assinatura desenhada implementados; testes SQL com usuários reais pendentes | GG | 6 — base concluída |
+| 8 | Financeiro mínimo + deploy | receivables, payment_records, baixa manual, recibos numerados, PDF do recibo, dashboard mínimo, tela financeira, pacote staging e smoke test local implementados; publicação Hostinger e smoke test remoto pendentes | G | 7 — em andamento |
 
 MVP declarado operacional somente com o fluxo completo (cadastro→pagamento) testado ponta a ponta em staging.
 
@@ -25,7 +25,7 @@ MVP declarado operacional somente com o fluxo completo (cadastro→pagamento) te
 | 2 | Permissões refinadas + auditoria ampliada + monitoramento + backup/restore validado | F2 | G |
 | 3 | Templates de mensagem + outbox + registro de comunicação | F2 | M |
 | 4 | Importação de clientes (CSV), relatórios básicos, testes E2E | F2 | M |
-| 5 | Pesquisa de satisfação simples | F2 | P |
+| 5 | Pesquisa de satisfação simples | F2 | P — base local implementada; aplicar migration remota e validar com usuários reais |
 | 6 | Estoque completo + compras + fornecedores | F3 | GG |
 | 7 | Financeiro completo (pagar, fluxo de caixa, conciliação, DRE) | F4 | GG |
 | 8 | Parceiros e repasses | F5 | G |
@@ -33,7 +33,7 @@ MVP declarado operacional somente com o fluxo completo (cadastro→pagamento) te
 | 10 | Frota | F7 | G |
 | 11 | Integrações (WhatsApp oficial, e-mail transacional, gateway/Pix, mapas, fiscal, webhooks) | F8 | GG |
 | 12 | BI e automações | F9 | GG |
-| 13 | Assinaturas/planos do SaaS + admin da plataforma completo | F2+ | G |
+| 13 | Assinaturas/planos do SaaS + admin da plataforma completo | F2+ | G — base de planos/trial iniciada em 2026-07-23 |
 
 ## 3. Critérios de aceite do MVP
 

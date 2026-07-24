@@ -16,9 +16,17 @@
 | Hospedagem web | Hostinger (estática) | SPA + headers de segurança |
 | VPS Hostinger | Somente com necessidade objetiva | Nenhuma prevista até F8 |
 
+Autenticação inicial: e-mail e senha via Supabase Auth. Provedores OAuth, SSO/SAML e login social ficam fora do MVP, mas podem ser adicionados depois sem troca da fundação de identidade.
+
 ### Ambientes
 
 `development` (Supabase local ou projeto dev), `staging`, `production` — projetos Supabase separados, variáveis via `--dart-define`/arquivos de ambiente fora do Git.
+
+Staging é parte do critério de aceite do MVP e da Entrega 8. Até lá, a arquitetura deve deixar deploy e variáveis preparados; credenciais, domínio e contas reais são dependências operacionais do projeto.
+
+### Direção visual
+
+UI moderna e futurista com neomorfismo controlado: superfícies claras, sombras suaves, botões elevados, acento violeta/azul, microinterações curtas e foco em legibilidade. Em telas internas, a densidade operacional prevalece sobre composição de landing page; o estilo aparece nos controles, filtros, cards de resumo, shell e estados de feedback sem prejudicar contraste, foco de teclado ou acessibilidade.
 
 ## 2. Módulos (32)
 
