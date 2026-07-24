@@ -11,6 +11,10 @@ dart_defines/*.json
 /rename_test2.txt
 /test_delete_me.txt
 *.save
+
+# ── Dados reais de clientes (PII) — nunca versionar ──────────────────────────
+scripts/import_customers_*.sql
+docs/imports/
 *.pyc
 *.swp
 .DS_Store
