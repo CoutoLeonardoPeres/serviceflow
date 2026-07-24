@@ -1,5 +1,36 @@
 # Changelog
 
+## [F1 — Preparação da validação de segurança RLS] — 2026-07-24
+
+### Adicionado
+
+- Reescritos `test/isolation/0007` a `0013` como testes SQL automatizados
+  (antes eram roteiros manuais comentados, sem asserção nem checagem de
+  isolamento entre tenants). Agora seguem o padrão de `0002`-`0005`: blocos
+  `DO $$ ... $$` com `RAISE EXCEPTION` em falha, verificação cross-tenant
+  (`insufficient_privilege` esperado para acesso de outro tenant) e rollback
+  automático dos dados de teste.
+- `supabase/seed/dev_seed.sql` reescrito: agora cria 5 usuários de teste
+  (owner, technician, viewer, analyst no tenant Alpha; owner no tenant Beta)
+  com placeholders de UUID válidos e consistentes com todos os arquivos de
+  `test/isolation/*.sql`, permitindo substituição em lote.
+- `scripts/create_test_users.sh`: cria os 5 usuários de teste via Supabase
+  Auth Admin API.
+- `scripts/apply_test_uuids.sh`: substitui os placeholders pelos UUIDs reais
+  em cópias geradas em `test/_generated/` (gitignored).
+- `scripts/run_isolation_tests.sh`: executa os 12 testes gerados em sequência
+  e produz relatório PASS/FAIL consolidado.
+- `docs/FASE1_RUNBOOK_SEGURANCA_RLS.md`: runbook completo da Fase 1, com
+  checklist de saída e aviso de que os testes reescritos ainda não foram
+  executados (ambiente de análise sem PostgreSQL/acesso root).
+
+### Observação
+
+Nenhum teste foi executado nesta sessão — apenas preparado. Recomenda-se
+rodar primeiro contra um Supabase local (`supabase start` + `supabase db
+reset`) antes do projeto remoto `Service_Saas`, para isolar eventuais erros
+de sintaxe de eventuais falhas reais de isolamento.
+
 ## [F0 — Higiene técnica pré-produção] — 2026-07-24
 
 ### Corrigido
