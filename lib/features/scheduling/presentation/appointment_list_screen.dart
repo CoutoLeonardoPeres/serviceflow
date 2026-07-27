@@ -844,7 +844,7 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                                   await showAppFormDialog<void>(
                                     context: context,
                                     title: 'Novo chamado',
-                                    maxWidth: 980,
+                                    maxWidth: 1100,
                                     child: const ServiceRequestFormScreen(
                                       embedded: true,
                                     ),
@@ -1465,7 +1465,7 @@ class _CreateScheduleDialogState extends ConsumerState<_CreateScheduleDialog> {
                           await showAppFormDialog<void>(
                             context: context,
                             title: 'Novo chamado',
-                            maxWidth: 980,
+                            maxWidth: 1100,
                             child: const ServiceRequestFormScreen(
                               embedded: true,
                             ),

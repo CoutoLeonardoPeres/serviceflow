@@ -70,6 +70,7 @@ class _ServiceRequestListScreenState
     final created = await showAppFormDialog<bool>(
       context: context,
       title: 'Novo chamado',
+      maxWidth: 1100,
       child: const ServiceRequestFormScreen(embedded: true),
     );
     if (created == true && mounted) {

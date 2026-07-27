@@ -9,72 +9,8 @@ import '../../../core/widgets/neomorphic.dart';
 import '../../../shared/providers/tenant_provider.dart';
 import '../../settings/domain/schedule_models.dart';
 import '../application/service_professional_list_notifier.dart';
+import '../domain/professional_categories.dart';
 import '../domain/service_professional.dart';
-
-const List<String> _professionalCategories = [
-  'Ajudante',
-  'Alpinista industrial',
-  'Arquiteto',
-  'Azulejista',
-  'Bombeiro civil',
-  'Bombeiro hidráulico',
-  'Calheiro',
-  'Carpinteiro',
-  'Chaveiro',
-  'Consultor técnico',
-  'Dedetizador',
-  'Designer de interiores',
-  'Eletricista',
-  'Eletricista automotivo',
-  'Encanador',
-  'Engenheiro civil',
-  'Engenheiro eletricista',
-  'Estucador',
-  'Gesseiro',
-  'Instalador de alarmes',
-  'Instalador de antenas',
-  'Instalador de câmeras',
-  'Instalador de energia solar',
-  'Instalador de portão automático',
-  'Jardineiro',
-  'Ladrilheiro',
-  'Lavador de estofados',
-  'Marceneiro',
-  'Marmorista',
-  'Mecânico',
-  'Mecânico industrial',
-  'Montador de móveis',
-  'Operador de máquinas',
-  'Pintor',
-  'Pedreiro',
-  'Piscineiro',
-  'Projetista',
-  'Serralheiro',
-  'Servente',
-  'Soldador',
-  'Supervisor técnico',
-  'Técnico de automação',
-  'Técnico de CFTV',
-  'Técnico de computadores',
-  'Técnico de controles de acesso',
-  'Técnico de elevadores',
-  'Técnico de eletrodomésticos',
-  'Técnico de energia solar',
-  'Técnico de esquadrias',
-  'Técnico de impressoras',
-  'Técnico de informática',
-  'Técnico de máquinas de lavar',
-  'Técnico de refrigeração',
-  'Técnico de segurança eletrônica',
-  'Técnico de telefonia',
-  'Técnico em automação predial',
-  'Técnico em climatização',
-  'Técnico em elétrica',
-  'Técnico em hidráulica',
-  'Técnico em manutenção predial',
-  'Técnico em redes',
-  'Vidraceiro',
-];
 
 class ServiceProfessionalListScreen extends ConsumerStatefulWidget {
   const ServiceProfessionalListScreen({super.key});
@@ -505,7 +441,7 @@ class _ServiceProfessionalFormState
     _nameController = TextEditingController(text: professional?.name ?? '');
     _category = professional != null && professional.category.trim().isNotEmpty
         ? professional.category
-        : _professionalCategories.first;
+        : professionalCategories.first;
     _emailController = TextEditingController(text: professional?.email ?? '');
     _phoneController = TextEditingController(text: professional?.phone ?? '');
     _notesController = TextEditingController(text: professional?.notes ?? '');
@@ -603,8 +539,8 @@ class _ServiceProfessionalFormState
                           labelText: 'Categoria / especialidade *',
                         ),
                         items: [
-                          ..._professionalCategories,
-                          if (!_professionalCategories.contains(_category))
+                          ...professionalCategories,
+                          if (!professionalCategories.contains(_category))
                             _category,
                         ]
                             .map(
@@ -621,7 +557,7 @@ class _ServiceProfessionalFormState
                             ? null
                             : (value) => setState(
                                   () => _category =
-                                      value ?? _professionalCategories.first,
+                                      value ?? professionalCategories.first,
                                 ),
                         validator: (value) =>
                             value == null || value.trim().length < 2

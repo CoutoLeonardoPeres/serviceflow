@@ -6,6 +6,7 @@ import '../../../core/widgets/app_form_dialog.dart';
 import '../../../core/widgets/app_form_layout.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/neomorphic.dart';
+import '../../professionals/domain/professional_categories.dart';
 import '../application/service_request_list_notifier.dart';
 import '../domain/service_category.dart';
 
@@ -208,8 +209,8 @@ class _CategoryForm extends ConsumerStatefulWidget {
 
 class _CategoryFormState extends ConsumerState<_CategoryForm> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
+  late String _name;
   late bool _isActive;
   bool _saving = false;
   String? _serverError;
@@ -218,14 +219,15 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
   void initState() {
     super.initState();
     final c = widget.category;
-    _nameController = TextEditingController(text: c?.name ?? '');
+    _name = c != null && c.name.trim().isNotEmpty
+        ? c.name
+        : professionalCategories.first;
     _descriptionController = TextEditingController(text: c?.description ?? '');
     _isActive = c?.isActive ?? true;
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -241,13 +243,13 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
     try {
       if (widget.category == null) {
         await repo.createCategory(
-          name: _nameController.text,
+          name: _name,
           description: _descriptionController.text,
         );
       } else {
         await repo.updateCategory(
           id: widget.category!.id,
-          name: _nameController.text,
+          name: _name,
           description: _descriptionController.text,
           isActive: _isActive,
         );
@@ -271,12 +273,25 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextFormField(
-            controller: _nameController,
+          DropdownButtonFormField<String>(
+            initialValue: _name,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Nome *'),
+            items: [
+              ...professionalCategories,
+              if (!professionalCategories.contains(_name)) _name,
+            ]
+                .map(
+                  (category) => DropdownMenuItem(
+                    value: category,
+                    child: Text(category, overflow: TextOverflow.ellipsis),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) =>
+                setState(() => _name = value ?? professionalCategories.first),
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Obrigatório' : null,
-            autofocus: true,
           ),
           const SizedBox(height: 12),
           TextFormField(

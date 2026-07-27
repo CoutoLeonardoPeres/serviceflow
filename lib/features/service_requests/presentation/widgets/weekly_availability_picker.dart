@@ -77,26 +77,32 @@ class WeeklyAvailabilityPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final weekday in kWeekdayOrder) ...[
-          _DayRow(
-            weekday: weekday,
-            day: businessHours[weekday] ?? defaultDaySchedule(),
-            selected: selected[weekday] ?? const {},
-            isPeriodOpen: _isPeriodOpen,
-            onToggle: (period) => _toggle(weekday, period),
-          ),
-          if (weekday != kWeekdayOrder.last) const SizedBox(height: 10),
+    // Os 7 dias sempre na mesma linha (rola horizontalmente se faltar
+    // espaço); os cards de manhã/tarde/noite ficam empilhados abaixo de
+    // cada dia.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final weekday in kWeekdayOrder) ...[
+            _DayColumn(
+              weekday: weekday,
+              day: businessHours[weekday] ?? defaultDaySchedule(),
+              selected: selected[weekday] ?? const {},
+              isPeriodOpen: _isPeriodOpen,
+              onToggle: (period) => _toggle(weekday, period),
+            ),
+            if (weekday != kWeekdayOrder.last) const SizedBox(width: 10),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
 
-class _DayRow extends StatelessWidget {
-  const _DayRow({
+class _DayColumn extends StatelessWidget {
+  const _DayColumn({
     required this.weekday,
     required this.day,
     required this.selected,
@@ -113,42 +119,37 @@ class _DayRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final anyOpen = kAvailabilityPeriods.any((p) => isPeriodOpen(day, p));
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: 76,
-          child: Text(
+    return SizedBox(
+      width: 132,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
             kWeekdayLabels[weekday]!,
+            textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: anyOpen ? null : AppColors.inkMuted,
                 ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final period in kAvailabilityPeriods)
-                _PeriodCard(
-                  label: kAvailabilityPeriodLabels[period]!,
-                  icon: _periodIcons[period]!,
-                  open: isPeriodOpen(day, period),
-                  timeRange: isPeriodOpen(day, period)
-                      ? '${_periodOf(day, period).start ?? ''}–${_periodOf(day, period).end ?? ''}'
-                      : null,
-                  selected: selected.contains(period),
-                  onTap: isPeriodOpen(day, period)
-                      ? () => onToggle(period)
-                      : null,
-                ),
-            ],
-          ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          for (final period in kAvailabilityPeriods) ...[
+            _PeriodCard(
+              label: kAvailabilityPeriodLabels[period]!,
+              icon: _periodIcons[period]!,
+              open: isPeriodOpen(day, period),
+              timeRange: isPeriodOpen(day, period)
+                  ? '${_periodOf(day, period).start ?? ''}–${_periodOf(day, period).end ?? ''}'
+                  : null,
+              selected: selected.contains(period),
+              onTap:
+                  isPeriodOpen(day, period) ? () => onToggle(period) : null,
+            ),
+            if (period != kAvailabilityPeriods.last)
+              const SizedBox(height: 8),
+          ],
+        ],
+      ),
     );
   }
 }
