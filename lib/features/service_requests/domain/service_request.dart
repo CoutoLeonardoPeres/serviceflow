@@ -111,6 +111,9 @@ class ServiceRequest {
     this.routeAddress,
     this.routeLatitude,
     this.routeLongitude,
+    this.customerPhone,
+    this.routeDistrict,
+    this.routeCity,
   });
 
   final String id;
@@ -138,6 +141,9 @@ class ServiceRequest {
   final String? routeAddress;
   final double? routeLatitude;
   final double? routeLongitude;
+  final String? customerPhone;
+  final String? routeDistrict;
+  final String? routeCity;
 
   String get displayNumber => '#${number.toString().padLeft(5, '0')}';
 
@@ -182,6 +188,9 @@ class ServiceRequest {
     String? routeAddress,
     double? routeLatitude,
     double? routeLongitude,
+    String? customerPhone,
+    String? routeDistrict,
+    String? routeCity,
   }) =>
       ServiceRequest(
         id: id ?? this.id,
@@ -209,6 +218,9 @@ class ServiceRequest {
         routeAddress: routeAddress ?? this.routeAddress,
         routeLatitude: routeLatitude ?? this.routeLatitude,
         routeLongitude: routeLongitude ?? this.routeLongitude,
+        customerPhone: customerPhone ?? this.customerPhone,
+        routeDistrict: routeDistrict ?? this.routeDistrict,
+        routeCity: routeCity ?? this.routeCity,
       );
 }
 
@@ -254,6 +266,14 @@ ServiceRequest serviceRequestFromRow(Map<String, dynamic> row) {
         : null,
     routeLongitude: routeAddress is Map<String, dynamic>
         ? (routeAddress['longitude'] as num?)?.toDouble()
+        : null,
+    customerPhone:
+        customer is Map<String, dynamic> ? customer['phone'] as String? : null,
+    routeDistrict: routeAddress is Map<String, dynamic>
+        ? routeAddress['district'] as String?
+        : null,
+    routeCity: routeAddress is Map<String, dynamic>
+        ? routeAddress['city'] as String?
         : null,
   );
 }

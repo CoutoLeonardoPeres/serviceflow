@@ -114,6 +114,25 @@ class AppointmentRepository {
     }
   }
 
+  /// Chaves 'kind:reference_id' com agendamento ativo (não cancelado). Serve
+  /// para tirar da fila o que já foi agendado para algum profissional.
+  Future<Set<String>> listScheduledReferenceKeys() async {
+    try {
+      final rows = await _db
+          .from(_table)
+          .select('kind, reference_id')
+          .neq('status', AppointmentStatus.cancelled.value);
+      return {
+        for (final row in (rows as List<dynamic>))
+          '${(row as Map)['kind']}:${row['reference_id']}',
+      };
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao carregar agendamentos.', e.toString());
+    }
+  }
+
   Future<List<Technician>> listTechnicians() async {
     try {
       final rows = await _db

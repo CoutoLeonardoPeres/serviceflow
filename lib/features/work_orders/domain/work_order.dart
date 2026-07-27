@@ -100,6 +100,11 @@ class WorkOrder {
     this.routeAddress,
     this.routeLatitude,
     this.routeLongitude,
+    this.customerPhone,
+    this.routeDistrict,
+    this.routeCity,
+    this.categoryId,
+    this.categoryName,
   });
 
   final String id;
@@ -127,6 +132,13 @@ class WorkOrder {
   final String? routeAddress;
   final double? routeLatitude;
   final double? routeLongitude;
+  final String? customerPhone;
+  final String? routeDistrict;
+  final String? routeCity;
+
+  /// Herdados do chamado de origem — a OS não tem categoria própria.
+  final String? categoryId;
+  final String? categoryName;
 
   String get displayNumber => '#${number.toString().padLeft(5, '0')}';
 
@@ -252,6 +264,22 @@ WorkOrder workOrderFromRow(Map<String, dynamic> row) {
         : null,
     routeLongitude: routeAddress is Map<String, dynamic>
         ? (routeAddress['longitude'] as num?)?.toDouble()
+        : null,
+    customerPhone:
+        customer is Map<String, dynamic> ? customer['phone'] as String? : null,
+    routeDistrict: routeAddress is Map<String, dynamic>
+        ? routeAddress['district'] as String?
+        : null,
+    routeCity: routeAddress is Map<String, dynamic>
+        ? routeAddress['city'] as String?
+        : null,
+    categoryId: request is Map<String, dynamic>
+        ? request['category_id'] as String?
+        : null,
+    categoryName: request is Map<String, dynamic> &&
+            request['service_categories'] is Map<String, dynamic>
+        ? (request['service_categories']
+            as Map<String, dynamic>)['name'] as String?
         : null,
   );
 }

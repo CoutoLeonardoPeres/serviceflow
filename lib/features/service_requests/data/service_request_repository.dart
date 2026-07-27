@@ -79,7 +79,7 @@ class ServiceRequestRepository {
       final to = from + _pageSize - 1;
 
       var query = _db.from(_table).select(
-            '*, customers(name), service_categories(name), service_priorities(name, level)',
+            '*, customers(name, phone), service_categories(name), service_priorities(name, level)',
           );
 
       if (filter.search != null && filter.search!.trim().isNotEmpty) {
@@ -124,7 +124,7 @@ class ServiceRequestRepository {
       final row = await _db
           .from(_table)
           .select(
-            '*, customers(name), service_categories(name), service_priorities(name, level)',
+            '*, customers(name, phone), service_categories(name), service_priorities(name, level)',
           )
           .eq('id', id)
           .single();
@@ -147,7 +147,7 @@ class ServiceRequestRepository {
           .from(_table)
           .insert(request.toInsertPayload())
           .select(
-            '*, customers(name), service_categories(name), service_priorities(name, level)',
+            '*, customers(name, phone), service_categories(name), service_priorities(name, level)',
           )
           .single();
       final enriched = Map<String, dynamic>.from(row);
@@ -167,7 +167,7 @@ class ServiceRequestRepository {
           .update(request.toInsertPayload())
           .eq('id', id)
           .select(
-            '*, customers(name), service_categories(name), service_priorities(name, level)',
+            '*, customers(name, phone), service_categories(name), service_priorities(name, level)',
           )
           .single();
       final enriched = Map<String, dynamic>.from(row);

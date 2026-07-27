@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/error/app_error.dart';
 import '../../../core/widgets/app_form_dialog.dart';
 import '../../../core/widgets/app_form_layout.dart';
 import '../../../core/widgets/error_view.dart';
@@ -53,6 +54,91 @@ final _calendarSchedulableWorkOrdersProvider =
             workOrder.status != WorkOrderStatus.cancelled,
       )
       .toList();
+});
+
+/// Um chamado ou OS esperando agendamento. Vira card arrastável na fila do
+/// profissional cuja categoria bate com a do item.
+class _QueueItem {
+  const _QueueItem({
+    required this.kind,
+    required this.referenceId,
+    required this.label,
+    required this.customerId,
+    required this.customerName,
+    this.addressId,
+    this.categoryName,
+    this.customerPhone,
+    this.district,
+    this.city,
+  });
+
+  final AppointmentKind kind;
+  final String referenceId;
+  final String label;
+  final String customerId;
+  final String customerName;
+  final String? addressId;
+  final String? categoryName;
+  final String? customerPhone;
+  final String? district;
+  final String? city;
+
+  String get key => '${kind.value}:$referenceId';
+
+  String get placeLabel {
+    final parts = [district, city].where(
+      (part) => part != null && part.trim().isNotEmpty,
+    );
+    return parts.isEmpty ? 'Endereço não informado' : parts.join(' · ');
+  }
+}
+
+final _scheduledReferenceKeysProvider =
+    FutureProvider.autoDispose<Set<String>>((ref) async {
+  return ref.read(appointmentRepositoryProvider).listScheduledReferenceKeys();
+});
+
+/// Fila de trabalho: chamados e OS ativos que ainda não têm agendamento.
+/// Agendar para um profissional remove o item da fila de todos os outros,
+/// porque a chave sai desta lista assim que o appointment é criado.
+final _workQueueProvider =
+    FutureProvider.autoDispose<List<_QueueItem>>((ref) async {
+  final scheduled = await ref.watch(_scheduledReferenceKeysProvider.future);
+  final requests =
+      await ref.watch(_calendarSchedulableRequestsProvider.future);
+  final workOrders =
+      await ref.watch(_calendarSchedulableWorkOrdersProvider.future);
+
+  final items = <_QueueItem>[
+    for (final request in requests)
+      _QueueItem(
+        kind: AppointmentKind.visit,
+        referenceId: request.id,
+        label: '${request.displayNumber} · ${request.title}',
+        customerId: request.customerId,
+        customerName: request.customerName ?? 'Cliente não informado',
+        addressId: request.addressId,
+        categoryName: request.categoryName,
+        customerPhone: request.customerPhone,
+        district: request.routeDistrict,
+        city: request.routeCity,
+      ),
+    for (final workOrder in workOrders)
+      _QueueItem(
+        kind: AppointmentKind.workOrder,
+        referenceId: workOrder.id,
+        label: '${workOrder.displayNumber} · ${workOrder.title}',
+        customerId: workOrder.customerId,
+        customerName: workOrder.customerName ?? 'Cliente não informado',
+        addressId: workOrder.addressId,
+        categoryName: workOrder.categoryName,
+        customerPhone: workOrder.customerPhone,
+        district: workOrder.routeDistrict,
+        city: workOrder.routeCity,
+      ),
+  ];
+
+  return items.where((item) => !scheduled.contains(item.key)).toList();
 });
 
 class AppointmentListScreen extends ConsumerStatefulWidget {
@@ -746,6 +832,12 @@ class _DayScheduleDialog extends ConsumerStatefulWidget {
 class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
   String _selectedCategory = 'Todos';
   String? _selectedProfessionalId;
+  final _createdHere = <Appointment>[];
+
+  List<Appointment> get _allAppointments => [
+        ...widget.appointments,
+        ..._createdHere,
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -972,16 +1064,34 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                       runSpacing: spacing,
                       children: entry.value
                           .map(
-                            (slot) => _ScheduleSlotCard(
-                              width: cardWidth.clamp(138.0, 176.0),
-                              slot: slot,
-                              appointment: _appointmentForSlot(
+                            (slot) => DragTarget<
+                                ({_QueueItem item, Technician technician})>(
+                              onWillAcceptWithDetails: (_) =>
+                                  _appointmentForSlot(
+                                    slot: slot,
+                                    selectedTechnician: selectedTechnician,
+                                    visibleTechnicians: visibleTechnicians,
+                                    appointments: _allAppointments,
+                                  ) ==
+                                  null,
+                              onAcceptWithDetails: (details) =>
+                                  _scheduleDroppedItem(
                                 slot: slot,
-                                selectedTechnician: selectedTechnician,
-                                visibleTechnicians: visibleTechnicians,
-                                appointments: widget.appointments,
+                                item: details.data.item,
+                                technician: details.data.technician,
                               ),
-                              onTap: () async {
+                              builder: (context, candidate, __) =>
+                                  _ScheduleSlotCard(
+                                width: cardWidth.clamp(138.0, 176.0),
+                                slot: slot,
+                                highlighted: candidate.isNotEmpty,
+                                appointment: _appointmentForSlot(
+                                  slot: slot,
+                                  selectedTechnician: selectedTechnician,
+                                  visibleTechnicians: visibleTechnicians,
+                                  appointments: _allAppointments,
+                                ),
+                                onTap: () async {
                                 final action = await showDialog<_SlotAction>(
                                   context: context,
                                   barrierDismissible: true,
@@ -1016,9 +1126,10 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                                         : _ScheduleMode.workOrder,
                                   ),
                                 );
-                                if (!context.mounted) return;
-                                Navigator.of(context).pop();
-                              },
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).pop();
+                                },
+                              ),
                             ),
                           )
                           .toList(),
@@ -1031,9 +1142,63 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
         )
         .toList();
   }
+
+  /// Agenda o item solto no horário, para o profissional dono da fila.
+  /// O item some da fila de todos porque passa a ter appointment ativo.
+  Future<void> _scheduleDroppedItem({
+    required DateTime slot,
+    required _QueueItem item,
+    required Technician technician,
+  }) async {
+    final technicianUserId = technician.userId;
+    if (technicianUserId == null) {
+      _showDropMessage(
+        '${technician.name} não tem usuário vinculado — agende pelo formulário.',
+      );
+      return;
+    }
+
+    try {
+      final created = await ref.read(appointmentRepositoryProvider).schedule(
+            technicianUserId: technicianUserId,
+            appointment: Appointment(
+              id: '',
+              tenantId: '',
+              kind: item.kind,
+              referenceId: item.referenceId,
+              customerId: item.customerId,
+              addressId: item.addressId,
+              scheduledStart: slot,
+              scheduledEnd: slot.add(const Duration(minutes: 30)),
+              status: AppointmentStatus.scheduled,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+      ref.invalidate(_scheduledReferenceKeysProvider);
+      ref.read(appointmentListProvider.notifier).refresh();
+      if (!mounted) return;
+      // O diálogo recebeu a lista de agendamentos por valor, então mantém os
+      // criados aqui para o slot já aparecer ocupado sem fechar a tela.
+      setState(() => _createdHere.add(created));
+      _showDropMessage(
+        '${item.customerName} agendado para ${DateFormat('HH:mm').format(slot)} com ${technician.name}.',
+      );
+    } catch (e) {
+      _showDropMessage(
+        e is AppError ? e.userMessage : 'Não foi possível agendar.',
+      );
+    }
+  }
+
+  void _showDropMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
-class _ProfessionSidebar extends StatelessWidget {
+class _ProfessionSidebar extends ConsumerStatefulWidget {
   const _ProfessionSidebar({
     required this.selectedProfessionalId,
     required this.technicians,
@@ -1047,7 +1212,17 @@ class _ProfessionSidebar extends StatelessWidget {
   final ValueChanged<Technician> onSelectTechnician;
 
   @override
+  ConsumerState<_ProfessionSidebar> createState() => _ProfessionSidebarState();
+}
+
+class _ProfessionSidebarState extends ConsumerState<_ProfessionSidebar> {
+  /// Todos começam recolhidos; expandir mostra a fila da categoria.
+  final _expanded = <String>{};
+
+  @override
   Widget build(BuildContext context) {
+    final queueAsync = ref.watch(_workQueueProvider);
+
     return NeomorphicPanel(
       borderRadius: 26,
       padding: const EdgeInsets.all(12),
@@ -1063,24 +1238,161 @@ class _ProfessionSidebar extends StatelessWidget {
           const SizedBox(height: 12),
           _SidebarItem(
             label: 'Visão geral',
-            selected: selectedProfessionalId == null,
+            selected: widget.selectedProfessionalId == null,
             icon: Icons.grid_view_rounded,
-            onTap: onSelectGeneral,
+            onTap: widget.onSelectGeneral,
           ),
           const SizedBox(height: 8),
           Expanded(
             child: ListView.separated(
-              itemCount: technicians.length,
+              itemCount: widget.technicians.length,
               separatorBuilder: (_, __) => const SizedBox(height: 6),
               itemBuilder: (context, index) {
-                final technician = technicians[index];
-                return _SidebarItem(
-                  label: technician.name,
-                  selected: technician.professionalId == selectedProfessionalId,
-                  icon: Icons.person_outline,
-                  onTap: () => onSelectTechnician(technician),
+                final technician = widget.technicians[index];
+                final isExpanded = _expanded.contains(technician.professionalId);
+                // Todos da mesma categoria enxergam a mesma fila.
+                final queue = queueAsync.maybeWhen(
+                  data: (items) => items
+                      .where(
+                        (item) =>
+                            item.categoryName == null ||
+                            item.categoryName == technician.category,
+                      )
+                      .toList(),
+                  orElse: () => const <_QueueItem>[],
+                );
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _SidebarItem(
+                      label: technician.name,
+                      selected: technician.professionalId ==
+                          widget.selectedProfessionalId,
+                      icon: isExpanded
+                          ? Icons.expand_more
+                          : Icons.chevron_right_rounded,
+                      badge: queue.isEmpty ? null : '${queue.length}',
+                      onTap: () {
+                        setState(() {
+                          if (!_expanded.remove(technician.professionalId)) {
+                            _expanded.add(technician.professionalId);
+                          }
+                        });
+                        widget.onSelectTechnician(technician);
+                      },
+                    ),
+                    if (isExpanded)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 0, 4),
+                        child: queue.isEmpty
+                            ? Text(
+                                'Nada aguardando agendamento.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              )
+                            : Column(
+                                children: queue
+                                    .map(
+                                      (item) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 8),
+                                        child: _QueueCard(
+                                          item: item,
+                                          technician: technician,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                      ),
+                  ],
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Card arrastável da fila. Solte-o num horário para agendar.
+class _QueueCard extends StatelessWidget {
+  const _QueueCard({required this.item, required this.technician});
+
+  final _QueueItem item;
+  final Technician technician;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = _QueueCardBody(item: item);
+    final payload = (item: item, technician: technician);
+    return Draggable<({_QueueItem item, Technician technician})>(
+      data: payload,
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(width: 240, child: _QueueCardBody(item: item)),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: card),
+      child: card,
+    );
+  }
+}
+
+class _QueueCardBody extends StatelessWidget {
+  const _QueueCardBody({required this.item});
+
+  final _QueueItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final accent = item.kind == AppointmentKind.workOrder
+        ? _kWorkOrderColor
+        : _kQuoteColor;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(14),
+        border: Border(
+          left: BorderSide(color: accent, width: 4),
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+          right: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.customerName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            item.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall,
+          ),
+          if (item.customerPhone != null &&
+              item.customerPhone!.trim().isNotEmpty)
+            Text(
+              item.customerPhone!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.bodySmall,
+            ),
+          Text(
+            item.placeLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -1095,12 +1407,14 @@ class _SidebarItem extends StatelessWidget {
     required this.selected,
     required this.icon,
     required this.onTap,
+    this.badge,
   });
 
   final String label;
   final bool selected;
   final IconData icon;
   final VoidCallback onTap;
+  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -1135,6 +1449,22 @@ class _SidebarItem extends StatelessWidget {
                     ),
               ),
             ),
+            if (badge != null)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badge!,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: colorScheme.primary,
+                      ),
+                ),
+              ),
           ],
         ),
       ),
@@ -1148,12 +1478,14 @@ class _ScheduleSlotCard extends StatelessWidget {
     required this.slot,
     required this.appointment,
     required this.onTap,
+    this.highlighted = false,
   });
 
   final double width;
   final DateTime slot;
   final Appointment? appointment;
   final VoidCallback onTap;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
@@ -1182,9 +1514,12 @@ class _ScheduleSlotCard extends StatelessWidget {
                 ),
               ],
               border: Border.all(
-                color: isBusy
-                    ? const Color(0xFFCAA1B4)
-                    : Colors.white.withValues(alpha: 0.72),
+                color: highlighted
+                    ? const Color(0xFFB2537F)
+                    : isBusy
+                        ? const Color(0xFFCAA1B4)
+                        : Colors.white.withValues(alpha: 0.72),
+                width: highlighted ? 2 : 1,
               ),
             ),
             child: Column(

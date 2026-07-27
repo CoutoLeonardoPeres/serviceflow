@@ -58,7 +58,7 @@ class WorkOrderRepository {
       final from = page * _pageSize;
       final to = from + _pageSize - 1;
       var query = _db.from(_table).select(
-            '*, customers(name), service_requests(title), quotations(number)',
+            '*, customers(name, phone), service_requests(title, category_id, service_categories(name)), quotations(number)',
           );
 
       if (filter.search != null && filter.search!.trim().isNotEmpty) {
@@ -95,7 +95,7 @@ class WorkOrderRepository {
       final row = await _db
           .from(_table)
           .select(
-              '*, customers(name), service_requests(title), quotations(number)')
+              '*, customers(name, phone), service_requests(title, category_id, service_categories(name)), quotations(number)')
           .eq('id', id)
           .single();
       final enriched = Map<String, dynamic>.from(row);
@@ -120,7 +120,7 @@ class WorkOrderRepository {
           .from(_table)
           .insert(workOrder.toInsertPayload())
           .select(
-              '*, customers(name), service_requests(title), quotations(number)')
+              '*, customers(name, phone), service_requests(title, category_id, service_categories(name)), quotations(number)')
           .single();
       final enriched = Map<String, dynamic>.from(row);
       final workOrderId = enriched['id'] as String;
