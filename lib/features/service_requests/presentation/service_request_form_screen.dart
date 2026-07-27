@@ -11,9 +11,11 @@ import '../../customers/application/customer_list_notifier.dart';
 import '../../customers/data/customer_repository.dart';
 import '../../customers/domain/customer.dart';
 import '../../customers/presentation/customer_form_screen.dart';
+import '../../settings/presentation/settings_screen.dart' show companySettingsProvider;
 import '../application/service_request_form_notifier.dart';
 import '../application/service_request_list_notifier.dart';
 import '../domain/service_request.dart';
+import 'widgets/weekly_availability_picker.dart';
 
 final _activeCustomersForRequestProvider =
     FutureProvider.autoDispose<List<Customer>>((ref) async {
@@ -45,7 +47,7 @@ class _ServiceRequestFormScreenState
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _availabilityController = TextEditingController();
+  Map<String, Set<String>> _availabilitySelection = {};
 
   String? _customerId;
   String? _categoryId;
@@ -59,7 +61,6 @@ class _ServiceRequestFormScreenState
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _availabilityController.dispose();
     super.dispose();
   }
 
@@ -79,7 +80,7 @@ class _ServiceRequestFormScreenState
           channel: _channel,
           categoryId: _categoryId,
           priorityId: _priorityId,
-          availabilityNotes: _availabilityController.text,
+          availabilityNotes: buildAvailabilitySummary(_availabilitySelection),
         );
 
     final state = ref.read(serviceRequestFormProvider);
@@ -273,14 +274,27 @@ class _ServiceRequestFormScreenState
                   },
                 ),
                 const SizedBox(height: 14),
-                TextFormField(
-                  controller: _availabilityController,
-                  decoration: const InputDecoration(
-                    labelText: 'Disponibilidade',
-                    hintText: 'Ex.: segunda a sexta depois das 14h',
-                  ),
-                  minLines: 2,
-                  maxLines: 3,
+                Text(
+                  'Disponibilidade do cliente',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final companySettings = ref.watch(companySettingsProvider);
+                    return companySettings.when(
+                      loading: () => const LinearProgressIndicator(),
+                      error: (_, __) => const Text(
+                        'Não foi possível carregar o horário de funcionamento.',
+                      ),
+                      data: (settings) => WeeklyAvailabilityPicker(
+                        businessHours: settings.weeklySchedule,
+                        selected: _availabilitySelection,
+                        onChanged: (value) =>
+                            setState(() => _availabilitySelection = value),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 14),
                 PhotoAttachmentPicker(
