@@ -112,6 +112,19 @@ class _ServiceCategoryScreenState extends ConsumerState<ServiceCategoryScreen> {
                       category: category,
                       onEdit: () =>
                           _openForm(context, ref, category: category),
+                      onToggleActive: (value) async {
+                        await ref
+                            .read(serviceRequestRepositoryProvider)
+                            .updateCategory(
+                              id: category.id,
+                              name: category.name,
+                              description: category.description,
+                              isActive: value,
+                            );
+                        ref.invalidate(serviceCategoriesAllProvider);
+                        // A lista do formulário de chamado só traz ativas.
+                        ref.invalidate(serviceRequestCategoriesProvider);
+                      },
                     ),
                   ),
                 ),
@@ -141,10 +154,15 @@ class _ServiceCategoryScreenState extends ConsumerState<ServiceCategoryScreen> {
 }
 
 class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({required this.category, required this.onEdit});
+  const _CategoryCard({
+    required this.category,
+    required this.onEdit,
+    required this.onToggleActive,
+  });
 
   final ServiceCategory category;
   final VoidCallback onEdit;
+  final ValueChanged<bool> onToggleActive;
 
   @override
   Widget build(BuildContext context) {
@@ -175,22 +193,16 @@ class _CategoryCard extends StatelessWidget {
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
-                if (!category.isActive)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text('Inativa', style: theme.textTheme.labelSmall),
-                    ),
-                  ),
               ],
             ),
           ),
+          Text(
+            category.isActive ? 'Ativa' : 'Inativa',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Switch(value: category.isActive, onChanged: onToggleActive),
           IconButton(icon: const Icon(Icons.edit_outlined), onPressed: onEdit),
         ],
       ),

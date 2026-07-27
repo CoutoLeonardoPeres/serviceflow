@@ -267,28 +267,6 @@ class ServiceRequestRepository {
     }
   }
 
-  /// Insere as categorias padrão (mesma lista do cadastro de profissionais)
-  /// que ainda não existem. Retorna quantas foram criadas.
-  Future<int> seedDefaultCategories(List<String> names) async {
-    final existing = (await listAllCategories())
-        .map((c) => c.name.trim().toLowerCase())
-        .toSet();
-    final missing = names
-        .where((n) => !existing.contains(n.trim().toLowerCase()))
-        .toList();
-    if (missing.isEmpty) return 0;
-    try {
-      await _db.from(_categoriesTable).insert(
-            missing.map((n) => {'name': n.trim()}).toList(),
-          );
-      return missing.length;
-    } on PostgrestException catch (e) {
-      throw _mapError(e);
-    } catch (e) {
-      throw UnexpectedError('Erro ao criar categorias padrão.', e.toString());
-    }
-  }
-
   Future<ServiceCategory> createCategory({
     required String name,
     String? description,
