@@ -250,6 +250,139 @@ class ServiceRequestRepository {
     }
   }
 
+  // Sem policy de DELETE nas duas tabelas abaixo (proposital) — "excluir" na
+  // UI e sempre um UPDATE de is_active.
+
+  Future<List<ServiceCategory>> listAllCategories() async {
+    try {
+      final rows =
+          await _db.from(_categoriesTable).select().order('name');
+      return (rows as List<dynamic>)
+          .map((row) => serviceCategoryFromRow(row as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao carregar categorias.', e.toString());
+    }
+  }
+
+  Future<ServiceCategory> createCategory({
+    required String name,
+    String? description,
+  }) async {
+    try {
+      final row = await _db
+          .from(_categoriesTable)
+          .insert({
+            'name': name.trim(),
+            'description':
+                (description == null || description.trim().isEmpty)
+                    ? null
+                    : description.trim(),
+          })
+          .select()
+          .single();
+      return serviceCategoryFromRow(row);
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao criar categoria.', e.toString());
+    }
+  }
+
+  Future<ServiceCategory> updateCategory({
+    required String id,
+    required String name,
+    String? description,
+    required bool isActive,
+  }) async {
+    try {
+      final row = await _db
+          .from(_categoriesTable)
+          .update({
+            'name': name.trim(),
+            'description':
+                (description == null || description.trim().isEmpty)
+                    ? null
+                    : description.trim(),
+            'is_active': isActive,
+          })
+          .eq('id', id)
+          .select()
+          .single();
+      return serviceCategoryFromRow(row);
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao atualizar categoria.', e.toString());
+    }
+  }
+
+  Future<List<ServicePriority>> listAllPriorities() async {
+    try {
+      final rows =
+          await _db.from(_prioritiesTable).select().order('level');
+      return (rows as List<dynamic>)
+          .map((row) => servicePriorityFromRow(row as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao carregar prioridades.', e.toString());
+    }
+  }
+
+  Future<ServicePriority> createPriority({
+    required String name,
+    required int level,
+    int? slaHours,
+  }) async {
+    try {
+      final row = await _db
+          .from(_prioritiesTable)
+          .insert({
+            'name': name.trim(),
+            'level': level,
+            'sla_hours': slaHours,
+          })
+          .select()
+          .single();
+      return servicePriorityFromRow(row);
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao criar prioridade.', e.toString());
+    }
+  }
+
+  Future<ServicePriority> updatePriority({
+    required String id,
+    required String name,
+    required int level,
+    int? slaHours,
+    required bool isActive,
+  }) async {
+    try {
+      final row = await _db
+          .from(_prioritiesTable)
+          .update({
+            'name': name.trim(),
+            'level': level,
+            'sla_hours': slaHours,
+            'is_active': isActive,
+          })
+          .eq('id', id)
+          .select()
+          .single();
+      return servicePriorityFromRow(row);
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao atualizar prioridade.', e.toString());
+    }
+  }
+
   Future<void> uploadPhotoAttachment({
     required String tenantId,
     required String requestId,

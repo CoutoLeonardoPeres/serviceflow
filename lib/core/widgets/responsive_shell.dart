@@ -86,10 +86,38 @@ const _destinations = [
     feature: TenantFeature.workOrders,
   ),
   _NavDestination(
+    route: AppRoutes.stock,
+    icon: Icons.inventory_2_outlined,
+    selectedIcon: Icons.inventory_2,
+    label: 'Estoque',
+    feature: TenantFeature.stock,
+  ),
+  _NavDestination(
+    route: AppRoutes.purchases,
+    icon: Icons.shopping_cart_outlined,
+    selectedIcon: Icons.shopping_cart,
+    label: 'Compras',
+    feature: TenantFeature.stock,
+  ),
+  _NavDestination(
     route: AppRoutes.financials,
     icon: Icons.account_balance_wallet_outlined,
     selectedIcon: Icons.account_balance_wallet,
     label: 'Financeiro',
+    feature: TenantFeature.financials,
+  ),
+  _NavDestination(
+    route: AppRoutes.payables,
+    icon: Icons.request_page_outlined,
+    selectedIcon: Icons.request_page,
+    label: 'A Pagar',
+    feature: TenantFeature.financials,
+  ),
+  _NavDestination(
+    route: AppRoutes.dre,
+    icon: Icons.summarize_outlined,
+    selectedIcon: Icons.summarize,
+    label: 'DRE',
     feature: TenantFeature.financials,
   ),
   _NavDestination(

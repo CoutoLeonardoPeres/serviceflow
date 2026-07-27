@@ -72,6 +72,39 @@ void main() {
       expect(target, isNull);
     });
 
+    test('mantem pesquisa publica aberta para visitante sem autenticacao', () {
+      final target = appRedirectTarget(
+        isAuthLoading: false,
+        isMembershipLoading: false,
+        isAuthenticated: false,
+        hasTenant: false,
+        currentPath: AppRoutes.satisfactionPublic('token-abc'),
+        planFeatures: enterprisePlan.features,
+        isPlanBlocked: false,
+        requiresPlanSelection: false,
+        hasOnboardingBypass: false,
+      );
+
+      expect(target, isNull);
+    });
+
+    test('mantem pesquisa publica aberta mesmo com plano bloqueado', () {
+      // O cliente final nao pode ser barrado pela situacao comercial do tenant.
+      final target = appRedirectTarget(
+        isAuthLoading: false,
+        isMembershipLoading: false,
+        isAuthenticated: true,
+        hasTenant: true,
+        currentPath: AppRoutes.satisfactionPublic('token-abc'),
+        planFeatures: enterprisePlan.features,
+        isPlanBlocked: true,
+        requiresPlanSelection: false,
+        hasOnboardingBypass: false,
+      );
+
+      expect(target, isNull);
+    });
+
     test(
         'mantem rota de aceite de convite aberta para usuario sem autenticacao',
         () {

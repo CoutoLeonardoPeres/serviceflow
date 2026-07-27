@@ -15,6 +15,8 @@ import '../../features/customers/domain/customer.dart';
 import '../../features/customers/presentation/customer_list_screen.dart';
 import '../../features/customers/presentation/customer_detail_screen.dart';
 import '../../features/customers/presentation/customer_form_screen.dart';
+import '../../features/service_requests/presentation/service_category_screen.dart';
+import '../../features/service_requests/presentation/service_priority_screen.dart';
 import '../../features/service_requests/presentation/service_request_detail_screen.dart';
 import '../../features/service_requests/presentation/service_request_form_screen.dart';
 import '../../features/service_requests/presentation/service_request_list_screen.dart';
@@ -26,15 +28,30 @@ import '../../features/quotations/presentation/quotation_detail_screen.dart';
 import '../../features/quotations/presentation/quotation_form_screen.dart';
 import '../../features/quotations/presentation/quotation_list_screen.dart';
 import '../../features/quotations/presentation/quotation_public_screen.dart';
+import '../../features/purchases/presentation/purchase_order_detail_screen.dart';
+import '../../features/purchases/presentation/purchase_order_form_screen.dart';
+import '../../features/purchases/presentation/purchase_order_list_screen.dart';
+import '../../features/purchases/presentation/supplier_list_screen.dart';
+import '../../features/stock/domain/stock_balance.dart';
+import '../../features/stock/presentation/product_list_screen.dart';
+import '../../features/stock/presentation/stock_count_screen.dart';
+import '../../features/stock/presentation/stock_list_screen.dart';
+import '../../features/stock/presentation/stock_movements_screen.dart';
+import '../../features/stock/presentation/stock_transfer_screen.dart';
+import '../../features/work_orders/presentation/satisfaction_public_screen.dart';
 import '../../features/work_orders/presentation/work_order_detail_screen.dart';
 import '../../features/work_orders/presentation/work_order_form_screen.dart';
 import '../../features/work_orders/presentation/work_order_list_screen.dart';
+import '../../features/financials/presentation/dre_screen.dart';
 import '../../features/financials/presentation/financial_list_screen.dart';
+import '../../features/financials/presentation/payables_screen.dart';
 import '../../features/financials/presentation/payments_screen.dart';
 import '../../features/financials/presentation/fiscal_screen.dart';
 import '../../features/promotions/presentation/promotions_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/modules/presentation/module_placeholder_screen.dart';
+import '../../features/communications/presentation/message_template_screen.dart';
+import '../../features/settings/presentation/audit_log_screen.dart';
 import '../../features/settings/presentation/plan_onboarding_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/settings/presentation/subscription_gate_screen.dart';
@@ -82,9 +99,26 @@ abstract class AppRoutes {
   static const workOrders = '/ordens-servico';
   static const workOrderNew = '/ordens-servico/novo';
   static String workOrderDetail(String id) => '/ordens-servico/$id';
+  static String satisfactionPublic(String token) => '/pesquisa/$token';
+
+  // Estoque (F3-P1)
+  static const stock = '/estoque';
+  static const products = '/estoque/produtos';
+  static String stockMovements(String productId) =>
+      '/estoque/movimentos/$productId';
+  static const stockTransfers = '/estoque/transferencias';
+  static const stockCounts = '/estoque/inventario';
+
+  // Compras (F3-P3)
+  static const purchases = '/compras';
+  static const purchaseOrderNew = '/compras/novo';
+  static const suppliers = '/compras/fornecedores';
+  static String purchaseOrderDetail(String id) => '/compras/pedido/$id';
 
   // Financeiro (E8)
   static const financials = '/financeiro';
+  static const payables = '/financeiro/pagar';
+  static const dre = '/financeiro/dre';
   static const payments = '/pagamentos';
   static const fiscal = '/fiscal';
   static const promotions = '/promocoes';
@@ -97,6 +131,10 @@ abstract class AppRoutes {
 
   // Configurações
   static const settings = '/configuracoes';
+  static const auditLog = '/configuracoes/auditoria';
+  static const messageTemplates = '/configuracoes/templates-mensagem';
+  static const serviceCategories = '/configuracoes/categorias-chamado';
+  static const servicePriorities = '/configuracoes/prioridades-chamado';
   static const subscription = '/assinatura';
   static const planOnboarding = '/onboarding-plano';
 }
@@ -121,7 +159,8 @@ String? appRedirectTarget({
     AppRoutes.resetPassword,
   };
   final isPublic = publicRoutes.contains(currentPath) ||
-      currentPath.startsWith('/orcamento-publico/');
+      currentPath.startsWith('/orcamento-publico/') ||
+      currentPath.startsWith('/pesquisa/');
   final isAuthPublicRoute = publicRoutes.contains(currentPath);
 
   if (!isAuthenticated) {
@@ -154,7 +193,8 @@ String? appRedirectTarget({
       isPlanBlocked &&
       currentPath != AppRoutes.subscription &&
       currentPath != AppRoutes.settings &&
-      !currentPath.startsWith('/orcamento-publico/')) {
+      !currentPath.startsWith('/orcamento-publico/') &&
+      !currentPath.startsWith('/pesquisa/')) {
     return AppRoutes.subscription;
   }
 
@@ -186,6 +226,14 @@ TenantFeature? featureForRoute(String currentPath) {
   }
   if (currentPath.startsWith(AppRoutes.workOrders)) {
     return TenantFeature.workOrders;
+  }
+  if (currentPath.startsWith(AppRoutes.stock)) {
+    return TenantFeature.stock;
+  }
+  // Compras faz parte do módulo de estoque para efeito de plano — separar as
+  // duas travas criaria o caso absurdo de comprar sem poder ver o saldo.
+  if (currentPath.startsWith(AppRoutes.purchases)) {
+    return TenantFeature.stock;
   }
   if (currentPath.startsWith(AppRoutes.financials)) {
     return TenantFeature.financials;
@@ -273,6 +321,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/orcamento-publico/:token',
         builder: (_, state) => QuotationPublicScreen(
+          token: state.pathParameters['token']!,
+        ),
+      ),
+      GoRoute(
+        path: '/pesquisa/:token',
+        builder: (_, state) => SatisfactionPublicScreen(
           token: state.pathParameters['token']!,
         ),
       ),
@@ -394,10 +448,68 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
 
+          // ── Estoque (F3-P1) ────────────────────────────────────────
+          GoRoute(
+            path: AppRoutes.stock,
+            builder: (_, __) => const StockListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.products,
+            builder: (_, __) => const ProductListScreen(),
+          ),
+          GoRoute(
+            path: '/estoque/movimentos/:productId',
+            builder: (_, state) => StockMovementsScreen(
+              productId: state.pathParameters['productId']!,
+              // Vem da lista de saldos para evitar consulta extra; quando a URL
+              // é aberta direto, a tela funciona sem o cabeçalho.
+              balance: state.extra is StockBalance
+                  ? state.extra! as StockBalance
+                  : null,
+            ),
+          ),
+
+          GoRoute(
+            path: AppRoutes.stockTransfers,
+            builder: (_, __) => const StockTransferScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.stockCounts,
+            builder: (_, __) => const StockCountListScreen(),
+          ),
+
+          // ── Compras (F3-P3) ────────────────────────────────────────
+          GoRoute(
+            path: AppRoutes.purchases,
+            builder: (_, __) => const PurchaseOrderListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.purchaseOrderNew,
+            builder: (_, __) => const PurchaseOrderFormScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.suppliers,
+            builder: (_, __) => const SupplierListScreen(),
+          ),
+          GoRoute(
+            path: '/compras/pedido/:id',
+            builder: (_, state) => PurchaseOrderDetailScreen(
+              orderId: state.pathParameters['id']!,
+            ),
+          ),
+
           // ── Financeiro (E8) ───────────────────────────────────────
           GoRoute(
             path: AppRoutes.financials,
             builder: (_, __) => const FinancialListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.payables,
+            builder: (_, __) => const PayablesScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.dre,
+            builder: (_, __) => const DreScreen(),
           ),
           GoRoute(
             path: AppRoutes.payments,
@@ -481,6 +593,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.settings,
             builder: (_, __) => const SettingsScreen(),
+            routes: [
+              GoRoute(
+                path: 'auditoria',
+                builder: (_, __) => const AuditLogScreen(),
+              ),
+              GoRoute(
+                path: 'templates-mensagem',
+                builder: (_, __) => const MessageTemplateScreen(),
+              ),
+              GoRoute(
+                path: 'categorias-chamado',
+                builder: (_, __) => const ServiceCategoryScreen(),
+              ),
+              GoRoute(
+                path: 'prioridades-chamado',
+                builder: (_, __) => const ServicePriorityScreen(),
+              ),
+            ],
           ),
         ],
       ),

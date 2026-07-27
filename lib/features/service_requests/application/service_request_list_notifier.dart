@@ -153,6 +153,19 @@ final serviceRequestPrioritiesProvider =
   return ref.read(serviceRequestRepositoryProvider).listPriorities();
 });
 
+// Telas de cadastro em Configurações mostram inativos também, por isso usam
+// listAll* em vez dos providers acima (que só trazem ativos, para os
+// dropdowns de abertura de chamado).
+final serviceCategoriesAllProvider =
+    FutureProvider.autoDispose<List<ServiceCategory>>((ref) async {
+  return ref.read(serviceRequestRepositoryProvider).listAllCategories();
+});
+
+final servicePrioritiesAllProvider =
+    FutureProvider.autoDispose<List<ServicePriority>>((ref) async {
+  return ref.read(serviceRequestRepositoryProvider).listAllPriorities();
+});
+
 final serviceRequestStatusHistoryProvider = FutureProvider.autoDispose
     .family<List<Map<String, dynamic>>, String>((ref, requestId) async {
   return ref.read(serviceRequestRepositoryProvider).getStatusHistory(requestId);
