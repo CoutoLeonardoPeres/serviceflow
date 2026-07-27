@@ -467,7 +467,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                   AppFormGrid(
                     children: [
                       AppFormFieldSpan(
-                        widthFactor: 1.3,
+                        widthFactor: 1.2,
                         child: TextFormField(
                           controller: _nameCtrl,
                           textCapitalization: TextCapitalization.words,
@@ -490,7 +490,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                           enabled: !isLoading,
                         ),
                       AppFormFieldSpan(
-                        widthFactor: 1.3,
+                        widthFactor: 1.2,
                         child: TextFormField(
                           controller: _documentCtrl,
                           decoration: InputDecoration(
@@ -583,7 +583,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                 child: AppFormGrid(
                   children: [
                     AppFormFieldSpan(
-                      widthFactor: 1.3,
+                      widthFactor: 1.2,
                       child: TextFormField(
                         controller: _contactNameCtrl,
                         textCapitalization: TextCapitalization.words,
@@ -598,7 +598,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                       ),
                     ),
                     AppFormFieldSpan(
-                      widthFactor: 1.3,
+                      widthFactor: 1.2,
                       child: TextFormField(
                         controller: _contactPhoneCtrl,
                         decoration: const InputDecoration(
@@ -618,7 +618,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                       ),
                     ),
                     AppFormFieldSpan(
-                      widthFactor: 1.3,
+                      widthFactor: 1.2,
                       child: TextFormField(
                         controller: _contactEmailCtrl,
                         decoration: const InputDecoration(
@@ -700,7 +700,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                         enabled: !isLoading,
                       ),
                       AppFormFieldSpan(
-                        widthFactor: 1.3,
+                        widthFactor: 1.2,
                         child: TextFormField(
                           controller: _streetCtrl,
                           textCapitalization: TextCapitalization.words,
@@ -730,7 +730,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                         enabled: !isLoading,
                       ),
                       AppFormFieldSpan(
-                        widthFactor: 1.3,
+                        widthFactor: 1.2,
                         child: TextFormField(
                           controller: _districtCtrl,
                           textCapitalization: TextCapitalization.words,
@@ -743,7 +743,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                         ),
                       ),
                       AppFormFieldSpan(
-                        widthFactor: 1.3,
+                        widthFactor: 1.2,
                         child: TextFormField(
                           controller: _cityCtrl,
                           textCapitalization: TextCapitalization.words,
