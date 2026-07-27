@@ -1065,8 +1065,7 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                       runSpacing: spacing,
                       children: entry.value
                           .map(
-                            (slot) => DragTarget<
-                                ({_QueueItem item, Technician technician})>(
+                            (slot) => DragTarget<_QueueDrag>(
                               onWillAcceptWithDetails: (_) =>
                                   _appointmentForSlot(
                                     slot: slot,
@@ -1390,25 +1389,7 @@ class _ProfessionSidebarState extends ConsumerState<_ProfessionSidebar> {
                     if (isExpanded)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(8, 8, 0, 4),
-                        child: queue.isEmpty
-                            ? Text(
-                                'Nada aguardando agendamento.',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              )
-                            : Column(
-                                children: queue
-                                    .map(
-                                      (item) => Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 8),
-                                        child: _QueueCard(
-                                          item: item,
-                                          technician: technician,
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
+                        child: _buildQueue(queueAsync, queue, technician),
                       ),
                   ],
                 );
@@ -1419,6 +1400,53 @@ class _ProfessionSidebarState extends ConsumerState<_ProfessionSidebar> {
       ),
     );
   }
+
+  Widget _buildQueue(
+    AsyncValue<List<_QueueItem>> queueAsync,
+    List<_QueueItem> queue,
+    Technician technician,
+  ) {
+    final textTheme = Theme.of(context).textTheme;
+
+    if (queueAsync.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: LinearProgressIndicator(),
+      );
+    }
+    if (queueAsync.hasError) {
+      return Text(
+        'Não foi possível carregar a fila: ${queueAsync.error}',
+        style: textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+    if (queue.isEmpty) {
+      return Text(
+        'Nada aguardando agendamento.',
+        style: textTheme.bodySmall,
+      );
+    }
+    return Column(
+      children: queue
+          .map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _QueueCard(item: item, technician: technician),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+/// O que viaja no arrasto: o item da fila e o profissional dono dela.
+class _QueueDrag {
+  const _QueueDrag({required this.item, required this.technician});
+
+  final _QueueItem item;
+  final Technician technician;
 }
 
 /// Card arrastável da fila. Solte-o num horário para agendar.
@@ -1431,15 +1459,23 @@ class _QueueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = _QueueCardBody(item: item);
-    final payload = (item: item, technician: technician);
-    return Draggable<({_QueueItem item, Technician technician})>(
-      data: payload,
+    return Draggable<_QueueDrag>(
+      data: _QueueDrag(item: item, technician: technician),
+      // A fila mora num ListView vertical: sem afinidade, o scroll ganha a
+      // disputa do gesto e o arrasto nunca começa. A agenda fica à direita,
+      // então o movimento horizontal é o natural mesmo.
+      affinity: Axis.horizontal,
       feedback: Material(
         color: Colors.transparent,
+        elevation: 8,
+        borderRadius: BorderRadius.circular(14),
         child: SizedBox(width: 240, child: _QueueCardBody(item: item)),
       ),
       childWhenDragging: Opacity(opacity: 0.35, child: card),
-      child: card,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.grab,
+        child: card,
+      ),
     );
   }
 }
@@ -1456,51 +1492,64 @@ class _QueueCardBody extends StatelessWidget {
         ? _kWorkOrderColor
         : _kQuoteColor;
 
+    // A faixa colorida é um filho, não uma borda: BoxDecoration proíbe
+    // Border não-uniforme junto com borderRadius e lança em tempo de render.
     return Container(
-      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
+        color: Colors.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(14),
-        border: Border(
-          left: BorderSide(color: accent, width: 4),
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
-          right: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
-          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
-        ),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            item.customerName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            item.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.bodySmall,
-          ),
-          if (item.customerPhone != null &&
-              item.customerPhone!.trim().isNotEmpty)
-            Text(
-              item.customerPhone!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.bodySmall,
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 4, color: accent),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.customerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall,
+                    ),
+                    if (item.customerPhone != null &&
+                        item.customerPhone!.trim().isNotEmpty)
+                      Text(
+                        item.customerPhone!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall,
+                      ),
+                    Text(
+                      item.placeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          Text(
-            item.placeLabel,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
