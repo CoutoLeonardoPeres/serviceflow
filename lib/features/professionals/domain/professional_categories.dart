@@ -1,3 +1,19 @@
+/// Ordenação A-Z de nomes de categoria, ignorando acentos e caixa — o
+/// `compareTo` puro do Dart joga acentuados depois do Z e o `order('name')`
+/// do Postgres depende da collation do banco.
+int compareCategoryNames(String a, String b) =>
+    _categorySortKey(a).compareTo(_categorySortKey(b));
+
+String _categorySortKey(String value) => value
+    .toLowerCase()
+    .replaceAll(RegExp(r'[áàâãä]'), 'a')
+    .replaceAll(RegExp(r'[éèêë]'), 'e')
+    .replaceAll(RegExp(r'[íìîï]'), 'i')
+    .replaceAll(RegExp(r'[óòôõö]'), 'o')
+    .replaceAll(RegExp(r'[úùûü]'), 'u')
+    .replaceAll('ç', 'c')
+    .trim();
+
 const List<String> professionalCategories = [
   'Ajudante',
   'Alpinista industrial',
@@ -44,8 +60,8 @@ const List<String> professionalCategories = [
   'Técnico de CFTV',
   'Técnico de computadores',
   'Técnico de controles de acesso',
-  'Técnico de elevadores',
   'Técnico de eletrodomésticos',
+  'Técnico de elevadores',
   'Técnico de energia solar',
   'Técnico de esquadrias',
   'Técnico de impressoras',

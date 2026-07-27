@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/error/app_error.dart';
+import '../../professionals/domain/professional_categories.dart';
 import '../domain/service_category.dart';
 import '../domain/service_priority.dart';
 import '../domain/service_request.dart';
@@ -225,7 +226,8 @@ class ServiceRequestRepository {
           .order('name');
       return (rows as List<dynamic>)
           .map((row) => serviceCategoryFromRow(row as Map<String, dynamic>))
-          .toList();
+          .toList()
+        ..sort((a, b) => compareCategoryNames(a.name, b.name));
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
@@ -259,7 +261,8 @@ class ServiceRequestRepository {
           await _db.from(_categoriesTable).select().order('name');
       return (rows as List<dynamic>)
           .map((row) => serviceCategoryFromRow(row as Map<String, dynamic>))
-          .toList();
+          .toList()
+        ..sort((a, b) => compareCategoryNames(a.name, b.name));
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {

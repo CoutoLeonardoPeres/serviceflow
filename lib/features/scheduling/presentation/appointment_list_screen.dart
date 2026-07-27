@@ -10,6 +10,7 @@ import '../../../core/widgets/neomorphic.dart';
 import '../../customers/application/customer_list_notifier.dart';
 import '../../customers/data/customer_repository.dart';
 import '../../customers/domain/customer.dart';
+import '../../professionals/domain/professional_categories.dart';
 import '../../service_requests/application/service_request_list_notifier.dart';
 import '../../service_requests/data/service_request_repository.dart';
 import '../../service_requests/domain/service_request.dart';
@@ -770,7 +771,8 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                 'Todos',
                 ...{
                   for (final technician in technicians) technician.category,
-                },
+                }.toList()
+                  ..sort(compareCategoryNames),
               ];
               final visibleTechnicians = technicians
                   .where(
