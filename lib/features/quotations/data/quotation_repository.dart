@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/error/app_error.dart';
 import '../../../core/files/stored_attachment.dart';
 import '../domain/quotation.dart';
+import '../domain/quotation_version.dart';
 
 class QuotationFilter {
   const QuotationFilter({
@@ -154,6 +155,119 @@ class QuotationRepository {
       throw _mapError(e);
     } catch (e) {
       throw UnexpectedError('Erro ao criar orcamento.', e.toString());
+    }
+  }
+
+  // ── Versionamento ─────────────────────────────────────────────────────────
+
+  /// Lista todas as versões do orçamento em ordem decrescente.
+  Future<List<QuotationVersion>> listVersions(String quotationId) async {
+    try {
+      final rows = await _db.rpc(
+        'list_quotation_versions',
+        params: {'p_quotation_id': quotationId},
+      );
+      return (rows as List<dynamic>)
+          .map((row) =>
+              quotationVersionFromRow(Map<String, dynamic>.from(row as Map)))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+          'Erro ao carregar versoes do orcamento.', e.toString());
+    }
+  }
+
+  /// Cria nova versão do orçamento com os itens fornecidos.
+  /// Retorna o novo versionId, versionNumber e totalCents.
+  Future<({String versionId, int versionNumber, int totalCents})>
+      createNewVersion({
+    required String quotationId,
+    required List<QuotationDraftItem> items,
+    String? notes,
+  }) async {
+    try {
+      final result = await _db.rpc(
+        'create_new_quotation_version',
+        params: {
+          'p_quotation_id': quotationId,
+          'p_items': items.map((i) => i.toPayload()).toList(),
+          'p_notes': notes,
+        },
+      );
+      final map = Map<String, dynamic>.from(result as Map);
+      return (
+        versionId: map['version_id'] as String,
+        versionNumber: (map['version_number'] as num).toInt(),
+        totalCents: (map['total_cents'] as num).toInt(),
+      );
+    } on PostgrestException catch (e) {
+      if (e.code == '42501') {
+        throw const PermissionError(
+          'Voce nao tem permissao para revisar este orcamento.',
+        );
+      }
+      if (e.code == 'P0001' || e.code == 'check_violation') {
+        throw BusinessRuleError(
+          e.message.isNotEmpty ? e.message : 'Operacao nao permitida.',
+        );
+      }
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+          'Erro ao criar versao do orcamento.', e.toString());
+    }
+  }
+
+  // ── Histórico de status ────────────────────────────────────────────────────
+
+  /// Lista o histórico de status do orçamento, mais recente primeiro.
+  Future<List<QuotationStatusEvent>> listStatusHistory(
+      String quotationId) async {
+    try {
+      final rows = await _db
+          .from('quotation_status_history')
+          .select('id, status, notes, changed_at')
+          .eq('quotation_id', quotationId)
+          .order('changed_at', ascending: false);
+      return (rows as List<dynamic>)
+          .map((row) => quotationStatusEventFromRow(
+              Map<String, dynamic>.from(row as Map)))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+          'Erro ao carregar historico do orcamento.', e.toString());
+    }
+  }
+
+  /// Cancela o orçamento com motivo obrigatório.
+  /// Não é possível cancelar orçamentos com status [approved] ou [cancelled].
+  Future<void> cancel(String quotationId, String reason) async {
+    try {
+      await _db.rpc(
+        'cancel_quotation',
+        params: {
+          'p_quotation_id': quotationId,
+          'p_reason': reason.trim(),
+        },
+      );
+    } on PostgrestException catch (e) {
+      if (e.code == '42501') {
+        throw const PermissionError(
+          'Voce nao tem permissao para cancelar este orcamento.',
+        );
+      }
+      if (e.code == 'P0001') {
+        throw BusinessRuleError(
+          e.message.isNotEmpty ? e.message : 'Operacao nao permitida.',
+        );
+      }
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao cancelar orcamento.', e.toString());
     }
   }
 

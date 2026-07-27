@@ -4,10 +4,13 @@ import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import '../../../core/error/app_error.dart';
 import '../../../core/files/attachment_link_action.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/files/attachment_picker.dart';
 import '../../../core/files/stored_attachment.dart';
 import '../../../core/widgets/app_form_dialog.dart';
@@ -16,6 +19,11 @@ import '../../../core/widgets/attachment_gallery.dart';
 import '../../../core/widgets/attachment_preview_dialog.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/neomorphic.dart';
+import '../../../shared/providers/tenant_provider.dart';
+import '../../communications/presentation/send_message_panel.dart';
+import '../../customers/application/customer_list_notifier.dart';
+import '../../stock/application/stock_notifier.dart';
+import '../../stock/domain/product.dart';
 import '../application/work_order_list_notifier.dart';
 import '../domain/work_order.dart';
 import 'widgets/work_order_status_chip.dart';
@@ -134,6 +142,145 @@ class WorkOrderDetailScreen extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Evidência anexada.')),
+      );
+    }
+  }
+
+  /// Gera o link público da pesquisa e abre o painel de envio já com o link
+  /// preenchido na variável {{link}} dos templates.
+  ///
+  /// Gerar um link novo revoga o anterior desta OS (regra da migration 0041),
+  /// então o link antigo deixa de funcionar.
+  Future<void> _sendSatisfactionSurvey(
+    BuildContext context,
+    WidgetRef ref,
+    WorkOrder workOrder,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final token = await ref
+          .read(workOrderRepositoryProvider)
+          .createSatisfactionPublicLink(workOrder.id);
+      final link =
+          '${Uri.base.origin}/#${AppRoutes.satisfactionPublic(token)}';
+
+      if (!context.mounted) return;
+
+      final customer =
+          await ref.read(customerDetailProvider(workOrder.customerId).future);
+      final tenant = ref.read(currentTenantProvider);
+
+      if (!context.mounted) return;
+
+      await showSendMessageSheet(
+        context,
+        MessageContext(
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone ?? '',
+          customerEmail: customer.email ?? '',
+          companyName: tenant?['name'] as String? ?? '',
+          workOrderNumber: workOrder.displayNumber.toString(),
+          serviceTitle: workOrder.title,
+          publicLink: link,
+          relatedEntity: 'work_orders',
+          relatedEntityId: workOrder.id,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is AppError
+                ? e.userMessage
+                : 'Não foi possível gerar o link da pesquisa.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _createReturn(
+    BuildContext context,
+    WidgetRef ref,
+    WorkOrder workOrder,
+  ) async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => _CancelReasonDialog(
+        title: 'Criar OS de retorno',
+        hint: 'Descreva o motivo do retorno / problema que persiste…',
+        confirmLabel: 'Criar retorno',
+        confirmColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
+    if (reason == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final returnWo =
+          await ref.read(workOrderRepositoryProvider).createReturn(
+                workOrder.id,
+                reason,
+              );
+      ref.read(workOrderListProvider.notifier).refresh();
+      ref.invalidate(workOrderEventsProvider(workOrder.id));
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content:
+              Text('OS de retorno ${returnWo.displayNumber} criada.'),
+          action: SnackBarAction(
+            label: 'Abrir',
+            onPressed: () =>
+                context.push(AppRoutes.workOrderDetail(returnWo.id)),
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is Exception
+                ? e.toString().replaceAll('Exception: ', '')
+                : 'Erro ao criar retorno.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _cancelWorkOrder(
+    BuildContext context,
+    WidgetRef ref,
+    WorkOrder workOrder,
+  ) async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => const _CancelReasonDialog(
+        title: 'Cancelar OS',
+        hint: 'Ex.: cliente solicitou cancelamento, serviço já foi executado…',
+        confirmLabel: 'Confirmar cancelamento',
+      ),
+    );
+    if (reason == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(workOrderRepositoryProvider).cancel(workOrder.id, reason);
+      ref.invalidate(workOrderDetailProvider(workOrderId));
+      ref.read(workOrderListProvider.notifier).refresh();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('OS cancelada.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is Exception
+                ? e.toString().replaceAll('Exception: ', '')
+                : 'Erro ao cancelar OS.',
+          ),
+        ),
       );
     }
   }
@@ -278,14 +425,40 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Text(
-                          '${workOrder.displayNumber} · ${workOrder.title}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.w900,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (workOrder.isReturn)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Chip(
+                                  label: const Text('Retorno'),
+                                  avatar: const Icon(Icons.replay_outlined,
+                                      size: 14),
+                                  labelStyle: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onTertiaryContainer,
+                                  ),
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .tertiaryContainer,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4),
+                                  visualDensity: VisualDensity.compact,
+                                ),
                               ),
+                            Text(
+                              '${workOrder.displayNumber} · ${workOrder.title}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -356,8 +529,109 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                             const Icon(Icons.sentiment_satisfied_alt_outlined),
                         label: const Text('Registrar satisfação'),
                       ),
+                      if (workOrder.status == WorkOrderStatus.done)
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              _sendSatisfactionSurvey(context, ref, workOrder),
+                          icon: const Icon(Icons.poll_outlined),
+                          label: const Text('Enviar pesquisa'),
+                        ),
+                      if (workOrder.status == WorkOrderStatus.done)
+                        FilledButton.icon(
+                          onPressed: () =>
+                              _createReturn(context, ref, workOrder),
+                          icon: const Icon(Icons.replay_outlined),
+                          label: const Text('Criar retorno'),
+                        ),
+                      if (workOrder.status != WorkOrderStatus.done &&
+                          workOrder.status != WorkOrderStatus.cancelled)
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              _cancelWorkOrder(context, ref, workOrder),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor:
+                                Theme.of(context).colorScheme.error,
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text('Cancelar OS'),
+                        ),
                     ],
                   ),
+                  if (workOrder.status == WorkOrderStatus.cancelled &&
+                      workOrder.cancellationReason != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .errorContainer
+                            .withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color:
+                                Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Motivo do cancelamento',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onErrorContainer,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  workOrder.cancellationReason!,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onErrorContainer,
+                                      ),
+                                ),
+                                if (workOrder.cancelledAt != null)
+                                  Text(
+                                    DateFormat('dd/MM/yyyy HH:mm', 'pt_BR')
+                                        .format(
+                                            workOrder.cancelledAt!.toLocal()),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onErrorContainer
+                                              .withOpacity(0.7),
+                                        ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -370,6 +644,32 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                   _InfoLine(
                       label: 'Cliente',
                       value: workOrder.customerName ?? workOrder.customerId),
+                  Consumer(builder: (context, ref, _) {
+                    final tenant = ref.watch(currentTenantProvider);
+                    final customerAsync =
+                        ref.watch(customerDetailProvider(workOrder.customerId));
+                    return customerAsync.maybeWhen(
+                      data: (c) => Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: SendMessageButton(
+                          messageContext: MessageContext(
+                            customerId: c.id,
+                            customerName: c.name,
+                            customerPhone: c.phone ?? '',
+                            customerEmail: c.email ?? '',
+                            companyName:
+                                tenant?['name'] as String? ?? '',
+                            workOrderNumber:
+                                workOrder.displayNumber.toString(),
+                            serviceTitle: workOrder.title,
+                            relatedEntity: 'work_orders',
+                            relatedEntityId: workOrder.id,
+                          ),
+                        ),
+                      ),
+                      orElse: () => const SizedBox.shrink(),
+                    );
+                  }),
                   _InfoLine(label: 'Descrição', value: workOrder.description),
                   _InfoLine(
                     label: 'Valor',
@@ -456,6 +756,8 @@ class WorkOrderDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             _SatisfactionPanel(workOrderId: workOrder.id),
+            const SizedBox(height: 16),
+            _WorkOrderEventsPanel(workOrderId: workOrder.id),
           ],
         ),
       ),
@@ -464,6 +766,185 @@ class WorkOrderDetailScreen extends ConsumerWidget {
 }
 
 Future<void> _noopStoredAttachmentAction(StoredAttachment attachment) async {}
+
+// ── Painel de histórico de eventos da OS ──────────────────────────────────────
+
+class _WorkOrderEventsPanel extends ConsumerWidget {
+  const _WorkOrderEventsPanel({required this.workOrderId});
+
+  final String workOrderId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final eventsAsync = ref.watch(workOrderEventsProvider(workOrderId));
+
+    return eventsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (events) {
+        if (events.isEmpty) return const SizedBox.shrink();
+        return NeomorphicPanel(
+          borderRadius: 20,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Histórico de eventos',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              ...events.asMap().entries.map((entry) {
+                final event = entry.value;
+                final isLast = entry.key == events.length - 1;
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            margin: const EdgeInsets.only(top: 4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          if (!isLast)
+                            Expanded(
+                              child: Container(
+                                width: 2,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                event.label,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              if (event.notes != null)
+                                Text(
+                                  event.notes!,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              Text(
+                                DateFormat('dd/MM/yyyy HH:mm', 'pt_BR')
+                                    .format(event.createdAt.toLocal()),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Diálogo de motivo de cancelamento ────────────────────────────────────────
+
+class _CancelReasonDialog extends StatefulWidget {
+  const _CancelReasonDialog({
+    required this.title,
+    required this.hint,
+    this.confirmLabel = 'Confirmar',
+    this.confirmColor, // null = error color, use false-y Color.transparent to use primary
+  });
+
+  final String title;
+  final String hint;
+  final String confirmLabel;
+  final Color? confirmColor;
+
+  @override
+  State<_CancelReasonDialog> createState() => _CancelReasonDialogState();
+}
+
+class _CancelReasonDialogState extends State<_CancelReasonDialog> {
+  final _ctrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final buttonColor =
+        widget.confirmColor ?? Theme.of(context).colorScheme.error;
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _ctrl,
+          autofocus: true,
+          maxLines: 3,
+          maxLength: 300,
+          decoration: InputDecoration(
+            labelText: 'Motivo / descrição *',
+            hintText: widget.hint,
+            border: const OutlineInputBorder(),
+          ),
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'Informe o motivo.';
+            }
+            return null;
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Voltar'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: buttonColor),
+          onPressed: () {
+            if (_formKey.currentState!.validate()) {
+              Navigator.of(context).pop(_ctrl.text.trim());
+            }
+          },
+          child: Text(widget.confirmLabel),
+        ),
+      ],
+    );
+  }
+}
 
 class _SatisfactionPanel extends ConsumerWidget {
   const _SatisfactionPanel({required this.workOrderId});
@@ -788,7 +1269,20 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
   final _quantityController = TextEditingController(text: '1');
   final _unitCostController = TextEditingController(text: '0');
   final _unitPriceController = TextEditingController(text: '0');
+  final _lotController = TextEditingController();
   bool _isSaving = false;
+
+  /// Produto do catálogo. Null = lançamento em texto livre, sem baixa de
+  /// estoque — caminho mantido de propósito no F3-P2, para não travar o
+  /// técnico quando o cadastro está incompleto.
+  String? _productId;
+
+  /// Depósito da baixa (F3-P4). Null usa o padrão do tenant.
+  String? _warehouseId;
+
+  /// Rastreio do produto selecionado (ADR-024, F3-P5). None = sem produto ou
+  /// produto sem rastreio — campo de lote/série some.
+  ProductTrackingType _trackingType = ProductTrackingType.none;
 
   @override
   void dispose() {
@@ -796,6 +1290,7 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
     _quantityController.dispose();
     _unitCostController.dispose();
     _unitPriceController.dispose();
+    _lotController.dispose();
     super.dispose();
   }
 
@@ -808,20 +1303,50 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
 
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
-      await ref.read(workOrderRepositoryProvider).addMaterial(
+      final result = await ref.read(workOrderRepositoryProvider).addMaterial(
             workOrderId: widget.workOrderId,
             description: _descriptionController.text.trim(),
             quantity:
                 double.parse(_quantityController.text.replaceAll(',', '.')),
             unitCostCents: _moneyToCents(_unitCostController.text),
             unitPriceCents: _moneyToCents(_unitPriceController.text),
+            productId: _productId,
+            warehouseId: _warehouseId,
+            lotCode: _lotController.text.trim().isEmpty
+                ? null
+                : _lotController.text.trim(),
           );
-      if (mounted) Navigator.of(context).pop(true);
+
+      if (result.fromStock) {
+        // O saldo mudou: quem estiver olhando a tela de estoque precisa ver.
+        invalidateStockAfterMovement(ref);
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+
+      if (result.fromStock) {
+        final applied = (result.unitCostCents / 100).toStringAsFixed(2);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Material baixado do estoque. Custo aplicado: R\$ $applied '
+              '(custo médio do saldo).',
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is AppError ? e.userMessage : 'Não foi possível salvar.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -842,6 +1367,113 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
               icon: Icons.inventory_2_outlined,
               child: AppFormGrid(
                 children: [
+                  // Seletor de catálogo. Escolher um produto faz o servidor
+                  // baixar o estoque e aplicar o custo médio; deixar em
+                  // "Fora do catálogo" registra apenas o custo digitado.
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final productsAsync =
+                          ref.watch(stockTrackedProductsProvider);
+                      return productsAsync.when(
+                        loading: () => const LinearProgressIndicator(),
+                        error: (_, __) => const SizedBox.shrink(),
+                        data: (products) => DropdownButtonFormField<String?>(
+                          initialValue: _productId,
+                          decoration: const InputDecoration(
+                            labelText: 'Produto do estoque',
+                            prefixIcon: Icon(Icons.inventory_outlined),
+                            helperText:
+                                'Baixa o saldo e usa o custo médio. Deixe em '
+                                '"Fora do catálogo" para item avulso.',
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Fora do catálogo'),
+                            ),
+                            ...products.map(
+                              (p) => DropdownMenuItem<String?>(
+                                value: p.id,
+                                child: Text(p.displayName),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _productId = value;
+                              _trackingType = ProductTrackingType.none;
+                              if (value != null) {
+                                // O custo virá do saldo; digitar aqui não
+                                // teria efeito e confundiria.
+                                _unitCostController.text = '0';
+                                final p = products
+                                    .where((e) => e.id == value)
+                                    .firstOrNull;
+                                if (p != null &&
+                                    _descriptionController.text
+                                        .trim()
+                                        .isEmpty) {
+                                  _descriptionController.text = p.name;
+                                }
+                                _trackingType =
+                                    p?.trackingType ?? ProductTrackingType.none;
+                              }
+                            });
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                  // Depósito só aparece quando há produto e mais de um depósito
+                  // — quem tem um só não precisa ver o campo (F3-P4).
+                  if (_productId != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final whAsync = ref.watch(warehousesProvider);
+                        return whAsync.maybeWhen(
+                          data: (warehouses) {
+                            if (warehouses.length < 2) {
+                              return const SizedBox.shrink();
+                            }
+                            return DropdownButtonFormField<String?>(
+                              initialValue: _warehouseId,
+                              decoration: const InputDecoration(
+                                labelText: 'Depósito da baixa',
+                                prefixIcon: Icon(Icons.warehouse_outlined),
+                              ),
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text('Padrão da empresa'),
+                                ),
+                                ...warehouses.map(
+                                  (w) => DropdownMenuItem<String?>(
+                                    value: w.id,
+                                    child: Text(w.name),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) =>
+                                  setState(() => _warehouseId = v),
+                            );
+                          },
+                          orElse: () => const SizedBox.shrink(),
+                        );
+                      },
+                    ),
+                  if (_trackingType != ProductTrackingType.none)
+                    TextFormField(
+                      controller: _lotController,
+                      decoration: InputDecoration(
+                        labelText: _trackingType == ProductTrackingType.serial
+                            ? 'Número de série'
+                            : 'Lote',
+                        prefixIcon: const Icon(Icons.qr_code_2_outlined),
+                        helperText: 'Código já existente no depósito.',
+                      ),
+                      validator: (value) =>
+                          (value ?? '').trim().isEmpty ? 'Informe o código.' : null,
+                    ),
                   TextFormField(
                     controller: _descriptionController,
                     decoration: const InputDecoration(
@@ -870,11 +1502,18 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
                   ),
                   TextFormField(
                     controller: _unitCostController,
+                    // Com produto do catálogo, o custo é o médio do saldo,
+                    // definido no servidor. Editar aqui não teria efeito.
+                    enabled: _productId == null,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration:
-                        const InputDecoration(labelText: 'Custo unitário'),
+                    decoration: InputDecoration(
+                      labelText: 'Custo unitário',
+                      helperText: _productId == null
+                          ? null
+                          : 'Definido pelo custo médio do estoque.',
+                    ),
                   ),
                   TextFormField(
                     controller: _unitPriceController,

@@ -146,6 +146,8 @@ class Quotation {
     this.validUntil,
     this.notes,
     this.terms,
+    this.cancelledAt,
+    this.cancellationReason,
     this.customerName,
     this.requestTitle,
     this.routeAddress,
@@ -167,6 +169,8 @@ class Quotation {
   final int totalCents;
   final String? notes;
   final String? terms;
+  final DateTime? cancelledAt;
+  final String? cancellationReason;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? customerName;
@@ -200,6 +204,8 @@ class Quotation {
     int? totalCents,
     String? notes,
     String? terms,
+    DateTime? cancelledAt,
+    String? cancellationReason,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? customerName,
@@ -223,6 +229,8 @@ class Quotation {
         totalCents: totalCents ?? this.totalCents,
         notes: notes ?? this.notes,
         terms: terms ?? this.terms,
+        cancelledAt: cancelledAt ?? this.cancelledAt,
+        cancellationReason: cancellationReason ?? this.cancellationReason,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         customerName: customerName ?? this.customerName,
@@ -307,6 +315,10 @@ Quotation quotationFromRow(Map<String, dynamic> row) {
     totalCents: (row['total_cents'] as num).toInt(),
     notes: row['notes'] as String?,
     terms: row['terms'] as String?,
+    cancelledAt: row['cancelled_at'] == null
+        ? null
+        : DateTime.parse(row['cancelled_at'] as String),
+    cancellationReason: row['cancellation_reason'] as String?,
     createdAt: DateTime.parse(row['created_at'] as String),
     updatedAt: DateTime.parse(row['updated_at'] as String),
     customerName:

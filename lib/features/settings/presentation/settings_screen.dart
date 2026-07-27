@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/plans/tenant_plan.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/utils/validators.dart';
+import '../../communications/application/communication_notifier.dart';
 import '../../../core/widgets/app_form_dialog.dart';
 import '../../../core/widgets/app_form_layout.dart';
 import '../../../core/widgets/error_view.dart';
@@ -608,6 +611,90 @@ class SettingsScreen extends ConsumerWidget {
                                   .toList(),
                             ),
                 ),
+                // Templates de mensagem (visível para quem tem acesso à escrita de clientes)
+                const SizedBox(height: 16),
+                AppFormSection(
+                  title: 'Templates de mensagem',
+                  icon: Icons.chat_bubble_outline,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.message_outlined),
+                        title: const Text('Gerenciar templates'),
+                        subtitle: const Text(
+                          'Crie modelos reutilizáveis para WhatsApp, e-mail e outros canais.',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push(AppRoutes.messageTemplates),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.auto_fix_high_outlined),
+                        title: const Text('Carregar templates padrão'),
+                        subtitle: const Text('Insere os modelos iniciais (apenas se não houver nenhum).'),
+                        onTap: () async {
+                          await ref
+                              .read(communicationRepositoryProvider)
+                              .seedDefaultTemplates();
+                          ref.invalidate(messageTemplatesProvider);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Templates padrão carregados.')),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                AppFormSection(
+                  title: 'Chamados',
+                  icon: Icons.confirmation_number_outlined,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.label_outline),
+                        title: const Text('Categorias'),
+                        subtitle: const Text('Categorias usadas na abertura de chamados.'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push(AppRoutes.serviceCategories),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.flag_outlined),
+                        title: const Text('Prioridades'),
+                        subtitle: const Text('Níveis de prioridade e SLA de atendimento.'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push(AppRoutes.servicePriorities),
+                      ),
+                    ],
+                  ),
+                ),
+                if ({
+                  'tenant_owner',
+                  'tenant_admin',
+                  'platform_admin',
+                }.contains(roleKey)) ...[
+                  const SizedBox(height: 16),
+                  AppFormSection(
+                    title: 'Trilha de auditoria',
+                    icon: Icons.history_outlined,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.receipt_long_outlined),
+                      title: const Text('Ver eventos de auditoria'),
+                      subtitle: const Text(
+                        'Registro imutável de ações sensíveis realizadas no sistema.',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push(AppRoutes.auditLog),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -13,6 +13,9 @@ import '../../../core/widgets/attachment_gallery.dart';
 import '../../../core/widgets/attachment_preview_dialog.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/neomorphic.dart';
+import '../../../shared/providers/tenant_provider.dart';
+import '../../communications/presentation/send_message_panel.dart';
+import '../../customers/application/customer_list_notifier.dart';
 import '../application/quotation_list_notifier.dart';
 import '../domain/quotation.dart';
 import '../pdf/quotation_pdf_generator.dart';
@@ -115,6 +118,34 @@ class QuotationDetailScreen extends ConsumerWidget {
         const SnackBar(
           content: Text('Não foi possível revogar o link agora.'),
         ),
+      );
+    }
+  }
+
+  Future<void> _cancelQuotation(
+    BuildContext context,
+    WidgetRef ref,
+    Quotation quote,
+  ) async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => const _CancelReasonDialog(
+        title: 'Cancelar orçamento',
+        hint: 'Ex.: cliente desistiu, preço fora do orçamento…',
+      ),
+    );
+    if (reason == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(quotationRepositoryProvider).cancel(quote.id, reason);
+      ref.invalidate(quotationDetailProvider(quote.id));
+      ref.invalidate(quotationListProvider);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Orçamento cancelado.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(e is Exception ? e.toString().replaceAll('Exception: ', '') : 'Erro ao cancelar orçamento.')),
       );
     }
   }
@@ -308,6 +339,30 @@ class QuotationDetailScreen extends ConsumerWidget {
                           icon: const Icon(Icons.link),
                           label: const Text('Copiar link público'),
                         ),
+                        Consumer(builder: (context, ref, _) {
+                          final tenant = ref.watch(currentTenantProvider);
+                          final customerAsync = ref.watch(
+                              customerDetailProvider(quote.customerId));
+                          return customerAsync.maybeWhen(
+                            data: (c) => SendMessageButton(
+                              messageContext: MessageContext(
+                                customerId: c.id,
+                                customerName: c.name,
+                                customerPhone: c.phone ?? '',
+                                customerEmail: c.email ?? '',
+                                companyName:
+                                    tenant?['name'] as String? ?? '',
+                                quotationNumber: quote.number.toString(),
+                                amount: (quote.totalCents / 100)
+                                    .toStringAsFixed(2)
+                                    .replaceAll('.', ','),
+                                relatedEntity: 'quotations',
+                                relatedEntityId: quote.id,
+                              ),
+                            ),
+                            orElse: () => const SizedBox.shrink(),
+                          );
+                        }),
                         OutlinedButton.icon(
                           onPressed: () =>
                               _revokePublicLinks(context, ref, quote),
@@ -321,8 +376,92 @@ class QuotationDetailScreen extends ConsumerWidget {
                             icon: const Icon(Icons.engineering_outlined),
                             label: const Text('Gerar OS'),
                           ),
+                        if (!quote.status.isTerminal)
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                _cancelQuotation(context, ref, quote),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.error,
+                              side: BorderSide(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                            icon: const Icon(Icons.cancel_outlined),
+                            label: const Text('Cancelar orçamento'),
+                          ),
                       ],
                     ),
+                    if (quote.status == QuotationStatus.cancelled &&
+                        quote.cancellationReason != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .errorContainer
+                              .withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.onErrorContainer,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Motivo do cancelamento',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onErrorContainer,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    quote.cancellationReason!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onErrorContainer,
+                                        ),
+                                  ),
+                                  if (quote.cancelledAt != null)
+                                    Text(
+                                      DateFormat('dd/MM/yyyy HH:mm', 'pt_BR')
+                                          .format(quote.cancelledAt!.toLocal()),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onErrorContainer
+                                                .withOpacity(0.7),
+                                          ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -396,6 +535,12 @@ class QuotationDetailScreen extends ConsumerWidget {
                   },
                 ),
               ),
+              const SizedBox(height: 16),
+              // ── Versões do orçamento ──────────────────────────────────────
+              _QuotationVersionsPanel(quotationId: quote.id),
+              const SizedBox(height: 16),
+              // ── Histórico de status ───────────────────────────────────────
+              _QuotationHistoryPanel(quotationId: quote.id),
             ],
           );
         },
@@ -405,3 +550,262 @@ class QuotationDetailScreen extends ConsumerWidget {
 }
 
 Future<void> _noopAttachmentAction(StoredAttachment attachment) async {}
+
+// ── Painel de versões do orçamento ────────────────────────────────────────────
+
+class _QuotationVersionsPanel extends ConsumerWidget {
+  const _QuotationVersionsPanel({required this.quotationId});
+
+  final String quotationId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final versionsAsync = ref.watch(quotationVersionsProvider(quotationId));
+    final currency = NumberFormat.simpleCurrency(locale: 'pt_BR');
+
+    return versionsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (versions) {
+        if (versions.isEmpty) return const SizedBox.shrink();
+        return NeomorphicPanel(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Versões do orçamento',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              ...versions.map((v) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: v.isCurrent
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                      child: Text(
+                        '${v.versionNumber}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: v.isCurrent
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    title: Text(v.label),
+                    subtitle: Text(
+                      DateFormat('dd/MM/yyyy HH:mm', 'pt_BR')
+                          .format(v.createdAt.toLocal()),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    trailing: Text(
+                      currency.format(v.totalCents / 100),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  )),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Painel de histórico de status do orçamento ────────────────────────────────
+
+class _QuotationHistoryPanel extends ConsumerWidget {
+  const _QuotationHistoryPanel({required this.quotationId});
+
+  final String quotationId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync =
+        ref.watch(quotationStatusHistoryProvider(quotationId));
+
+    return historyAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (events) {
+        if (events.isEmpty) return const SizedBox.shrink();
+        return NeomorphicPanel(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Histórico de status',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              ...events.asMap().entries.map((entry) {
+                final event = entry.value;
+                final isLast = entry.key == events.length - 1;
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            margin: const EdgeInsets.only(top: 4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          if (!isLast)
+                            Expanded(
+                              child: Container(
+                                width: 2,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _statusLabel(event.status),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              if (event.notes != null)
+                                Text(
+                                  event.notes!,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              Text(
+                                DateFormat('dd/MM/yyyy HH:mm', 'pt_BR')
+                                    .format(event.changedAt.toLocal()),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _statusLabel(String status) => switch (status) {
+        'draft' => 'Rascunho',
+        'under_review' => 'Em revisão',
+        'sent' => 'Enviado',
+        'viewed' => 'Visualizado',
+        'awaiting_approval' => 'Aguardando aprovação',
+        'approved' => 'Aprovado',
+        'rejected' => 'Rejeitado',
+        'change_requested' => 'Solicitou alteração',
+        'expired' => 'Expirado',
+        'cancelled' => 'Cancelado',
+        _ => status,
+      };
+}
+
+// ── Diálogo de motivo de cancelamento ────────────────────────────────────────
+
+class _CancelReasonDialog extends StatefulWidget {
+  const _CancelReasonDialog({required this.title, required this.hint});
+
+  final String title;
+  final String hint;
+
+  @override
+  State<_CancelReasonDialog> createState() => _CancelReasonDialogState();
+}
+
+class _CancelReasonDialogState extends State<_CancelReasonDialog> {
+  final _ctrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _ctrl,
+          autofocus: true,
+          maxLines: 3,
+          maxLength: 300,
+          decoration: InputDecoration(
+            labelText: 'Motivo *',
+            hintText: widget.hint,
+            border: const OutlineInputBorder(),
+          ),
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'Informe o motivo do cancelamento.';
+            }
+            return null;
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Voltar'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+          onPressed: () {
+            if (_formKey.currentState!.validate()) {
+              Navigator.of(context).pop(_ctrl.text.trim());
+            }
+          },
+          child: const Text('Confirmar cancelamento'),
+        ),
+      ],
+    );
+  }
+}

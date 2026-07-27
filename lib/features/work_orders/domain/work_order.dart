@@ -88,9 +88,12 @@ class WorkOrder {
     this.requestId,
     this.quotationId,
     this.addressId,
+    this.parentWorkOrderId,
     this.scheduledStart,
     this.scheduledEnd,
     this.completedAt,
+    this.cancelledAt,
+    this.cancellationReason,
     this.customerName,
     this.requestTitle,
     this.quotationNumber,
@@ -106,6 +109,7 @@ class WorkOrder {
   final String? requestId;
   final String? quotationId;
   final String? addressId;
+  final String? parentWorkOrderId;
   final WorkOrderStatus status;
   final String title;
   final String description;
@@ -113,6 +117,8 @@ class WorkOrder {
   final DateTime? scheduledStart;
   final DateTime? scheduledEnd;
   final DateTime? completedAt;
+  final DateTime? cancelledAt;
+  final String? cancellationReason;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? customerName;
@@ -123,6 +129,8 @@ class WorkOrder {
   final double? routeLongitude;
 
   String get displayNumber => '#${number.toString().padLeft(5, '0')}';
+
+  bool get isReturn => parentWorkOrderId != null;
 
   Map<String, dynamic> toInsertPayload() => {
         'customer_id': customerId,
@@ -217,6 +225,7 @@ WorkOrder workOrderFromRow(Map<String, dynamic> row) {
     requestId: row['request_id'] as String?,
     quotationId: row['quotation_id'] as String?,
     addressId: row['address_id'] as String?,
+    parentWorkOrderId: row['parent_work_order_id'] as String?,
     status: WorkOrderStatus.fromValue(row['status'] as String),
     title: row['title'] as String,
     description: row['description'] as String,
@@ -224,6 +233,8 @@ WorkOrder workOrderFromRow(Map<String, dynamic> row) {
     scheduledStart: parseNullableDate('scheduled_start'),
     scheduledEnd: parseNullableDate('scheduled_end'),
     completedAt: parseNullableDate('completed_at'),
+    cancelledAt: parseNullableDate('cancelled_at'),
+    cancellationReason: row['cancellation_reason'] as String?,
     createdAt: DateTime.parse(row['created_at'] as String),
     updatedAt: DateTime.parse(row['updated_at'] as String),
     customerName:

@@ -5,6 +5,7 @@ import '../../../core/files/stored_attachment.dart';
 import '../../../shared/providers/supabase_provider.dart';
 import '../data/quotation_repository.dart';
 import '../domain/quotation.dart';
+import '../domain/quotation_version.dart';
 
 class QuotationListState {
   const QuotationListState({
@@ -121,4 +122,14 @@ final quotationItemsProvider = FutureProvider.autoDispose
   return ref
       .read(quotationRepositoryProvider)
       .listItems(args.quotationId, versionId: args.versionId);
+});
+
+final quotationVersionsProvider = FutureProvider.autoDispose
+    .family<List<QuotationVersion>, String>((ref, quotationId) async {
+  return ref.read(quotationRepositoryProvider).listVersions(quotationId);
+});
+
+final quotationStatusHistoryProvider = FutureProvider.autoDispose
+    .family<List<QuotationStatusEvent>, String>((ref, quotationId) async {
+  return ref.read(quotationRepositoryProvider).listStatusHistory(quotationId);
 });

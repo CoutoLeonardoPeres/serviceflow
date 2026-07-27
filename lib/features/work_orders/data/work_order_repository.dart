@@ -3,7 +3,10 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/error/app_error.dart';
 import '../../../core/files/stored_attachment.dart';
+import '../domain/satisfaction_public_context.dart';
 import '../domain/work_order.dart';
+import '../domain/work_order_event.dart';
+import '../domain/work_order_material.dart';
 import '../domain/work_order_satisfaction.dart';
 
 class WorkOrderFilter {
@@ -177,6 +180,34 @@ class WorkOrderRepository {
     }
   }
 
+  /// Cancela a OS com motivo obrigatório.
+  /// Não é possível cancelar OS com status [done] ou [cancelled].
+  Future<void> cancel(String workOrderId, String reason) async {
+    try {
+      await _db.rpc(
+        'cancel_work_order',
+        params: {
+          'p_work_order_id': workOrderId,
+          'p_reason': reason.trim(),
+        },
+      );
+    } on PostgrestException catch (e) {
+      if (e.code == '42501') {
+        throw const PermissionError(
+          'Voce nao tem permissao para cancelar esta OS.',
+        );
+      }
+      if (e.code == 'P0001') {
+        throw BusinessRuleError(
+          e.message.isNotEmpty ? e.message : 'Operacao nao permitida.',
+        );
+      }
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao cancelar OS.', e.toString());
+    }
+  }
+
   Future<void> recordTimeEntry({
     required String workOrderId,
     required DateTime startedAt,
@@ -200,15 +231,29 @@ class WorkOrderRepository {
     }
   }
 
-  Future<void> addMaterial({
+  /// Adiciona material à OS.
+  ///
+  /// Com [productId], o servidor baixa o estoque e ignora [unitCostCents] —
+  /// o custo passa a ser o custo médio vigente do saldo (F3-P2). Sem ele, o
+  /// lançamento é texto livre e não toca no estoque.
+  ///
+  /// [warehouseId] escolhe o depósito da baixa (F3-P4); sem ele, o servidor
+  /// usa o depósito padrão do tenant.
+  ///
+  /// Se o saldo não cobrir a quantidade, nada é gravado: a transação inteira
+  /// volta atrás e o erro traz a quantidade disponível.
+  Future<WorkOrderMaterialResult> addMaterial({
     required String workOrderId,
     required String description,
     required double quantity,
     required int unitCostCents,
     required int unitPriceCents,
+    String? productId,
+    String? warehouseId,
+    String? lotCode,
   }) async {
     try {
-      await _db.rpc(
+      final res = await _db.rpc(
         'add_work_order_material',
         params: {
           'p_work_order_id': workOrderId,
@@ -216,12 +261,40 @@ class WorkOrderRepository {
           'p_quantity': quantity,
           'p_unit_cost_cents': unitCostCents,
           'p_unit_price_cents': unitPriceCents,
+          'p_product_id': productId,
+          'p_warehouse_id': warehouseId,
+          'p_lot_code': lotCode,
         },
       );
+      return workOrderMaterialResultFromMap(res as Map<String, dynamic>);
     } on PostgrestException catch (e) {
+      // Saldo insuficiente e depósito padrão ausente chegam como regra de
+      // negócio com mensagem já escrita para o usuário.
+      if (e.code == '23514' || e.code == 'P0001') {
+        final msg = e.message.trim();
+        if (msg.isNotEmpty) throw BusinessRuleError(msg);
+      }
       throw _mapError(e);
     } catch (e) {
       throw UnexpectedError('Erro ao adicionar material da OS.', e.toString());
+    }
+  }
+
+  /// Materiais da OS com indicação de quais baixaram estoque.
+  Future<List<WorkOrderMaterial>> listMaterials(String workOrderId) async {
+    try {
+      final rows = await _db.rpc(
+        'list_work_order_materials',
+        params: {'p_work_order_id': workOrderId},
+      );
+      return (rows as List)
+          .cast<Map<String, dynamic>>()
+          .map(workOrderMaterialFromRow)
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao listar materiais da OS.', e.toString());
     }
   }
 
@@ -430,6 +503,156 @@ class WorkOrderRepository {
         'Erro ao registrar satisfação da OS.',
         e.toString(),
       );
+    }
+  }
+
+  // ── Pesquisa pública de satisfação (F2-P5) ────────────────────────────────
+
+  /// Gera um link público de pesquisa para uma OS concluída.
+  ///
+  /// Retorna o token em claro — o banco guarda apenas o hash SHA-256, então
+  /// este é o único momento em que o token existe. Gerar um novo link revoga
+  /// o anterior da mesma OS.
+  Future<String> createSatisfactionPublicLink(
+    String workOrderId, {
+    DateTime? expiresAt,
+  }) async {
+    try {
+      final token = await _db.rpc(
+        'create_satisfaction_public_link',
+        params: {
+          'p_work_order_id': workOrderId,
+          'p_expires_at': expiresAt?.toIso8601String(),
+        },
+      );
+      return token as String;
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+        'Erro ao gerar link da pesquisa.',
+        e.toString(),
+      );
+    }
+  }
+
+  Future<void> revokeSatisfactionPublicLink(String workOrderId) async {
+    try {
+      await _db.rpc(
+        'revoke_satisfaction_public_link',
+        params: {'p_work_order_id': workOrderId},
+      );
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+        'Erro ao revogar link da pesquisa.',
+        e.toString(),
+      );
+    }
+  }
+
+  /// Lê o contexto público da pesquisa. Chamado sem autenticação.
+  Future<SatisfactionPublicContext> getPublicSatisfactionContext(
+    String token,
+  ) async {
+    try {
+      final row = await _db.rpc(
+        'get_public_satisfaction_context',
+        params: {'p_token': token},
+      );
+      return satisfactionPublicContextFromRow(row as Map<String, dynamic>);
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+        'Erro ao carregar a pesquisa.',
+        e.toString(),
+      );
+    }
+  }
+
+  /// Envia a resposta da pesquisa. Chamado sem autenticação.
+  ///
+  /// O tenant e a OS vêm do token no servidor — nada de identificação é
+  /// aceito do cliente.
+  Future<void> submitPublicSatisfaction({
+    required String token,
+    required int rating,
+    String? contactName,
+    String? comment,
+  }) async {
+    try {
+      await _db.rpc(
+        'submit_public_satisfaction',
+        params: {
+          'p_token': token,
+          'p_rating': rating,
+          'p_contact_name': contactName,
+          'p_comment': comment,
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+        'Erro ao enviar a pesquisa.',
+        e.toString(),
+      );
+    }
+  }
+
+  // ── Retornos ──────────────────────────────────────────────────────────────
+
+  /// Cria uma OS de retorno vinculada à OS original (precisa estar done).
+  Future<WorkOrder> createReturn(String originalId, String reason) async {
+    try {
+      final row = await _db.rpc(
+        'create_return_work_order',
+        params: {
+          'p_original_id': originalId,
+          'p_reason': reason.trim(),
+        },
+      );
+      final enriched = Map<String, dynamic>.from(row as Map);
+      await _attachRouteAddresses([enriched]);
+      return workOrderFromRow(enriched);
+    } on PostgrestException catch (e) {
+      if (e.code == '42501') {
+        throw const PermissionError(
+          'Voce nao tem permissao para criar retorno desta OS.',
+        );
+      }
+      if (e.code == 'P0001') {
+        throw BusinessRuleError(
+          e.message.isNotEmpty ? e.message : 'Operacao nao permitida.',
+        );
+      }
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao criar retorno da OS.', e.toString());
+    }
+  }
+
+  // ── Histórico de eventos ───────────────────────────────────────────────────
+
+  /// Lista os eventos da OS, mais recente primeiro.
+  Future<List<WorkOrderEvent>> listEvents(String workOrderId) async {
+    try {
+      final rows = await _db
+          .from('work_order_events')
+          .select('id, event_type, notes, created_at')
+          .eq('work_order_id', workOrderId)
+          .order('created_at', ascending: false);
+      return (rows as List<dynamic>)
+          .map((row) =>
+              workOrderEventFromRow(Map<String, dynamic>.from(row as Map)))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError(
+          'Erro ao carregar historico da OS.', e.toString());
     }
   }
 

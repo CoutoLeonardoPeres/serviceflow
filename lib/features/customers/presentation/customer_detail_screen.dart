@@ -9,6 +9,8 @@ import '../../../core/widgets/address_location_box.dart';
 import '../../../core/widgets/app_form_dialog.dart';
 import '../../../core/widgets/app_form_layout.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../shared/providers/tenant_provider.dart';
+import '../../communications/presentation/send_message_panel.dart';
 import '../application/customer_form_notifier.dart';
 import '../application/customer_list_notifier.dart';
 import '../domain/customer.dart';
@@ -260,6 +262,21 @@ class _DataTab extends StatelessWidget {
           ),
         if (customer.notes != null && customer.notes!.isNotEmpty)
           _InfoRow(label: 'Observações', value: customer.notes!),
+        if (customer.phone != null || customer.email != null) ...[
+          const SizedBox(height: 12),
+          Consumer(builder: (context, ref, _) {
+            final tenant = ref.watch(currentTenantProvider);
+            return SendMessageButton(
+              messageContext: MessageContext(
+                customerId: customer.id,
+                customerName: customer.name,
+                customerPhone: customer.phone ?? '',
+                customerEmail: customer.email ?? '',
+                companyName: tenant?['name'] as String? ?? '',
+              ),
+            );
+          }),
+        ],
         const Divider(height: 32),
         _InfoRow(
           label: 'Cadastrado em',

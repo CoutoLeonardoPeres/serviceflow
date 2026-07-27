@@ -5,6 +5,7 @@ import '../../../core/files/stored_attachment.dart';
 import '../../../shared/providers/supabase_provider.dart';
 import '../data/work_order_repository.dart';
 import '../domain/work_order.dart';
+import '../domain/work_order_event.dart';
 import '../domain/work_order_satisfaction.dart';
 
 class WorkOrderListState {
@@ -110,4 +111,9 @@ final workOrderEvidenceProvider = FutureProvider.autoDispose
 final workOrderItemsProvider = FutureProvider.autoDispose
     .family<List<WorkOrderItem>, String>((ref, workOrderId) async {
   return ref.read(workOrderRepositoryProvider).listItems(workOrderId);
+});
+
+final workOrderEventsProvider = FutureProvider.autoDispose
+    .family<List<WorkOrderEvent>, String>((ref, workOrderId) async {
+  return ref.read(workOrderRepositoryProvider).listEvents(workOrderId);
 });
