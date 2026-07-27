@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/error/app_error.dart';
 import '../domain/appointment.dart';
+import '../domain/appointment_event.dart';
 import '../domain/technician.dart';
 
 class AppointmentFilter {
@@ -111,6 +112,49 @@ class AppointmentRepository {
       throw _mapError(e);
     } catch (e) {
       throw UnexpectedError('Erro ao agendar atendimento.', e.toString());
+    }
+  }
+
+  /// Cancela e devolve o item para a fila de todos os profissionais da
+  /// categoria. Aceita tanto quem tem appointments.write quanto o próprio
+  /// técnico atribuído — a checagem é feita no banco.
+  Future<void> cancel({
+    required String appointmentId,
+    String? reason,
+  }) async {
+    try {
+      await _db.rpc(
+        'cancel_appointment',
+        params: {
+          'p_appointment_id': appointmentId,
+          'p_reason': (reason == null || reason.trim().isEmpty)
+              ? null
+              : reason.trim(),
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao cancelar atendimento.', e.toString());
+    }
+  }
+
+  /// Histórico de um agendamento, do mais recente para o mais antigo.
+  Future<List<AppointmentEvent>> listEvents(String appointmentId) async {
+    try {
+      final rows = await _db
+          .from('appointment_events')
+          .select('*, profiles(full_name)')
+          .eq('appointment_id', appointmentId)
+          .order('created_at', ascending: false)
+          .order('id', ascending: false);
+      return (rows as List<dynamic>)
+          .map((row) => appointmentEventFromRow(row as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao carregar histórico.', e.toString());
     }
   }
 

@@ -1,5 +1,57 @@
 # Changelog
 
+## [F5-P1 — Agenda por fila de categoria com arrastar para agendar] — 2026-07-27
+
+A agenda deixa de ser um calendário passivo e passa a operar por fila
+(ADR-027). Chamados e OS aguardando agendamento aparecem para todos os
+profissionais da categoria; o operador arrasta o item para um horário;
+cancelar devolve o item para a fila de todos.
+
+### Adicionado
+
+- **Fila de trabalho por categoria** na tela de horários do dia. Os
+  profissionais aparecem recolhidos, com contador; expandir mostra os
+  chamados e OS da categoria dele em cards com nome do cliente, telefone,
+  bairro e cidade. A fila é derivada: um item está nela quando não tem
+  agendamento com status diferente de `cancelled` — por isso agendar tira
+  o item da fila de todos automaticamente, sem tabela de fila.
+- **Arrastar e soltar** o card num horário livre agenda ali mesmo. Clicar
+  no horário sem arrastar mantém o fluxo de cadastro anterior.
+- **`appointment_events`** (`0051_appointment_events.sql`): histórico
+  append-only da agenda — agendado, reagendado, cancelado, status
+  alterado — com autor, técnico, motivo e horário anterior. Alimentado por
+  trigger em `appointments`, não pela aplicação, então qualquer caminho que
+  mexa na agenda fica registrado. Índice por técnico + tipo + data para os
+  relatórios de produtividade e cancelamento.
+- **`cancel_appointment(uuid, text)`**: cancela com motivo, revoga o
+  assignment (liberando a janela do técnico) e devolve o item para a fila.
+  Aceita quem tem `appointments.write` **ou** o próprio técnico atribuído,
+  para o cancelamento em campo.
+- Chamados e OS passam a expor telefone do cliente, bairro e cidade; a OS
+  herda a categoria do chamado de origem.
+- `test/isolation/0024_appointment_events_test.sql` — 8 testes cobrindo
+  registro de evento, duplo agendamento, cancelamento, reagendamento,
+  agendamento de OS, append-only e isolamento entre tenants.
+
+### Corrigido
+
+- **Agendar ordem de serviço era impossível no banco**, apesar de a UI
+  oferecer "Agendar OS" desde E5. Dois motivos independentes:
+  `appointments.reference_id` tinha FK rígida para `service_requests`
+  mesmo quando `kind = 'work_order'` (o id da OS nunca satisfaria a FK), e
+  `schedule_appointment` recusava `p_kind <> 'visit'` com "ainda não
+  suportado no MVP". A FK virou validação por tipo no trigger de meta, que
+  já checava tenant por tipo, e a RPC passou a aceitar `work_order`.
+- `schedule_appointment` ganhou guarda contra agendar o mesmo item duas
+  vezes — com advisory lock por referência, já que o lock existente era
+  por técnico e não impedia dois operadores arrastando o mesmo card.
+
+### Pendente (F5-P2)
+
+- UI para atribuir mais de um profissional ao mesmo atendimento; o schema
+  já suporta (`appointment_assignments` é 1:N).
+- Relatórios de BI sobre `appointment_events`.
+
 ## [Validação RLS real de F3-P5/F4-P1/F4-P2 + bug de created_at] — 2026-07-27
 
 Migrations 0047-0049 aplicadas no Supabase remoto e validadas com

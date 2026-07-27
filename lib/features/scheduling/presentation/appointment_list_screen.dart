@@ -833,11 +833,12 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
   String _selectedCategory = 'Todos';
   String? _selectedProfessionalId;
   final _createdHere = <Appointment>[];
+  final _cancelledHere = <String>{};
 
   List<Appointment> get _allAppointments => [
         ...widget.appointments,
         ..._createdHere,
-      ];
+      ].where((item) => !_cancelledHere.contains(item.id)).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -1091,6 +1092,14 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                                   visibleTechnicians: visibleTechnicians,
                                   appointments: _allAppointments,
                                 ),
+                                onCancel: () => _cancelSlotAppointment(
+                                  _appointmentForSlot(
+                                    slot: slot,
+                                    selectedTechnician: selectedTechnician,
+                                    visibleTechnicians: visibleTechnicians,
+                                    appointments: _allAppointments,
+                                  ),
+                                ),
                                 onTap: () async {
                                 final action = await showDialog<_SlotAction>(
                                   context: context,
@@ -1191,10 +1200,106 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
     }
   }
 
+  /// Cancela o atendimento do slot. O item volta para a fila de todos os
+  /// profissionais da categoria, e o motivo fica no histórico para relatório.
+  Future<void> _cancelSlotAppointment(Appointment? appointment) async {
+    if (appointment == null) return;
+
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (_) => _CancelAppointmentDialog(appointment: appointment),
+    );
+    if (reason == null) return;
+
+    try {
+      await ref.read(appointmentRepositoryProvider).cancel(
+            appointmentId: appointment.id,
+            reason: reason,
+          );
+      ref.invalidate(_scheduledReferenceKeysProvider);
+      ref.read(appointmentListProvider.notifier).refresh();
+      if (!mounted) return;
+      setState(() {
+        _createdHere.removeWhere((item) => item.id == appointment.id);
+        _cancelledHere.add(appointment.id);
+      });
+      _showDropMessage('Atendimento cancelado e devolvido para a fila.');
+    } catch (e) {
+      _showDropMessage(
+        e is AppError ? e.userMessage : 'Não foi possível cancelar.',
+      );
+    }
+  }
+
   void _showDropMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _CancelAppointmentDialog extends StatefulWidget {
+  const _CancelAppointmentDialog({required this.appointment});
+
+  final Appointment appointment;
+
+  @override
+  State<_CancelAppointmentDialog> createState() =>
+      _CancelAppointmentDialogState();
+}
+
+class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
+  final _reasonController = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final time = DateFormat('HH:mm', 'pt_BR')
+        .format(widget.appointment.scheduledStart);
+    return AlertDialog(
+      title: const Text('Cancelar atendimento'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${widget.appointment.customerName ?? 'Cliente'} · $time',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'O item volta para a fila de todos os profissionais da categoria.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _reasonController,
+            autofocus: true,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Motivo',
+              hintText: 'Ex.: cliente remarcou',
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Voltar'),
+        ),
+        FilledButton(
+          onPressed: () =>
+              Navigator.of(context).pop(_reasonController.text.trim()),
+          child: const Text('Cancelar atendimento'),
+        ),
+      ],
+    );
   }
 }
 
@@ -1479,6 +1584,7 @@ class _ScheduleSlotCard extends StatelessWidget {
     required this.appointment,
     required this.onTap,
     this.highlighted = false,
+    this.onCancel,
   });
 
   final double width;
@@ -1486,6 +1592,7 @@ class _ScheduleSlotCard extends StatelessWidget {
   final Appointment? appointment;
   final VoidCallback onTap;
   final bool highlighted;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -1497,7 +1604,7 @@ class _ScheduleSlotCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(24),
-          onTap: isBusy ? null : onTap,
+          onTap: isBusy ? onCancel : onTap,
           child: Ink(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -1563,13 +1670,20 @@ class _ScheduleSlotCard extends StatelessWidget {
                 Text(
                   appointment == null
                       ? 'Agendar orçamento ou OS'
-                      : appointment?.serviceRequestTitle ??
-                          appointment?.customerName ??
+                      : appointment?.customerName ??
+                          appointment?.serviceRequestTitle ??
                           'Horário ocupado',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                if (isBusy)
+                  Text(
+                    'Toque para cancelar',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
               ],
             ),
           ),
