@@ -84,21 +84,41 @@ class AppFormGrid extends StatelessWidget {
         final fieldWidth =
             (availableWidth - (spacing * (columns - 1))) / columns;
 
+        final baseWidth = fieldWidth.isFinite ? fieldWidth : minFieldWidth;
+
         return Wrap(
           spacing: spacing,
           runSpacing: runSpacing,
-          children: children
-              .map(
-                (child) => SizedBox(
-                  width: fieldWidth.isFinite ? fieldWidth : minFieldWidth,
-                  child: child,
-                ),
-              )
-              .toList(),
+          children: children.map((child) {
+            var factor = 1.0;
+            var actual = child;
+            if (child is AppFormFieldSpan) {
+              factor = child.widthFactor;
+              actual = child.child;
+            }
+            return SizedBox(width: baseWidth * factor, child: actual);
+          }).toList(),
         );
       },
     );
   }
+}
+
+/// Marca um campo do [AppFormGrid] para ocupar uma largura diferente da
+/// padrão da coluna. [widthFactor] 1.3 = 30% mais largo que os outros
+/// campos da mesma grade.
+class AppFormFieldSpan extends StatelessWidget {
+  const AppFormFieldSpan({
+    super.key,
+    required this.child,
+    this.widthFactor = 1.0,
+  });
+
+  final Widget child;
+  final double widthFactor;
+
+  @override
+  Widget build(BuildContext context) => child;
 }
 
 class AppFormWideField extends StatelessWidget {

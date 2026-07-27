@@ -466,16 +466,20 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                   const SizedBox(height: 14),
                   AppFormGrid(
                     children: [
-                      TextFormField(
-                        controller: _nameCtrl,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: InputDecoration(
-                          labelText: 'Nome *',
-                          hintText:
-                              _type.usesCpf ? 'Nome completo' : 'Razão social',
+                      AppFormFieldSpan(
+                        widthFactor: 1.3,
+                        child: TextFormField(
+                          controller: _nameCtrl,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            labelText: 'Nome *',
+                            hintText: _type.usesCpf
+                                ? 'Nome completo'
+                                : 'Razão social',
+                          ),
+                          validator: (v) => validateRequired(v, 'Nome'),
+                          enabled: !isLoading,
                         ),
-                        validator: (v) => validateRequired(v, 'Nome'),
-                        enabled: !isLoading,
                       ),
                       if (!_type.usesCpf)
                         TextFormField(
@@ -485,23 +489,27 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                               const InputDecoration(labelText: 'Nome fantasia'),
                           enabled: !isLoading,
                         ),
-                      TextFormField(
-                        controller: _documentCtrl,
-                        decoration: InputDecoration(
-                          labelText: _type.usesCpf ? 'CPF' : 'CNPJ',
-                          hintText: _type.usesCpf
-                              ? '000.000.000-00'
-                              : '00.000.000/0000-00',
-                        ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          _DigitsMaskTextInputFormatter(
-                            maxDigits: _type.usesCpf ? 11 : 14,
-                            formatter: _type.usesCpf ? _formatCpf : _formatCnpj,
+                      AppFormFieldSpan(
+                        widthFactor: 1.3,
+                        child: TextFormField(
+                          controller: _documentCtrl,
+                          decoration: InputDecoration(
+                            labelText: _type.usesCpf ? 'CPF' : 'CNPJ',
+                            hintText: _type.usesCpf
+                                ? '000.000.000-00'
+                                : '00.000.000/0000-00',
                           ),
-                        ],
-                        validator: _validateDocument,
-                        enabled: !isLoading,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            _DigitsMaskTextInputFormatter(
+                              maxDigits: _type.usesCpf ? 11 : 14,
+                              formatter:
+                                  _type.usesCpf ? _formatCpf : _formatCnpj,
+                            ),
+                          ],
+                          validator: _validateDocument,
+                          enabled: !isLoading,
+                        ),
                       ),
                     ],
                   ),
@@ -574,44 +582,54 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                 icon: Icons.supervisor_account_outlined,
                 child: AppFormGrid(
                   children: [
-                    TextFormField(
-                      controller: _contactNameCtrl,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Pessoa de contato *',
-                        hintText: 'Pode ser o mesmo nome do cliente',
-                      ),
-                      validator: (v) =>
-                          validateRequired(v, 'Pessoa de contato'),
-                      onChanged: (_) => _contactNameEdited = true,
-                      enabled: !isLoading,
-                    ),
-                    TextFormField(
-                      controller: _contactPhoneCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Telefone do contato',
-                        hintText: '(11) 99999-9999',
-                      ),
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [
-                        _DigitsMaskTextInputFormatter(
-                          maxDigits: 11,
-                          formatter: _formatPhone,
+                    AppFormFieldSpan(
+                      widthFactor: 1.3,
+                      child: TextFormField(
+                        controller: _contactNameCtrl,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Pessoa de contato *',
+                          hintText: 'Pode ser o mesmo nome do cliente',
                         ),
-                      ],
-                      validator: validatePhone,
-                      onChanged: (_) => _contactPhoneEdited = true,
-                      enabled: !isLoading,
+                        validator: (v) =>
+                            validateRequired(v, 'Pessoa de contato'),
+                        onChanged: (_) => _contactNameEdited = true,
+                        enabled: !isLoading,
+                      ),
                     ),
-                    TextFormField(
-                      controller: _contactEmailCtrl,
-                      decoration:
-                          const InputDecoration(labelText: 'E-mail do contato'),
-                      keyboardType: TextInputType.emailAddress,
-                      autocorrect: false,
-                      validator: (v) =>
-                          v != null && v.isNotEmpty ? validateEmail(v) : null,
-                      enabled: !isLoading,
+                    AppFormFieldSpan(
+                      widthFactor: 1.3,
+                      child: TextFormField(
+                        controller: _contactPhoneCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Telefone do contato',
+                          hintText: '(11) 99999-9999',
+                        ),
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          _DigitsMaskTextInputFormatter(
+                            maxDigits: 11,
+                            formatter: _formatPhone,
+                          ),
+                        ],
+                        validator: validatePhone,
+                        onChanged: (_) => _contactPhoneEdited = true,
+                        enabled: !isLoading,
+                      ),
+                    ),
+                    AppFormFieldSpan(
+                      widthFactor: 1.3,
+                      child: TextFormField(
+                        controller: _contactEmailCtrl,
+                        decoration: const InputDecoration(
+                            labelText: 'E-mail do contato'),
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        validator: (v) => v != null && v.isNotEmpty
+                            ? validateEmail(v)
+                            : null,
+                        enabled: !isLoading,
+                      ),
                     ),
                   ],
                 ),
@@ -681,16 +699,20 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                         },
                         enabled: !isLoading,
                       ),
-                      TextFormField(
-                        controller: _streetCtrl,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: InputDecoration(
-                          labelText:
-                              _isEdit ? 'Rua / Avenida' : 'Rua / Avenida *',
+                      AppFormFieldSpan(
+                        widthFactor: 1.3,
+                        child: TextFormField(
+                          controller: _streetCtrl,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            labelText: _isEdit
+                                ? 'Rua / Avenida'
+                                : 'Rua / Avenida *',
+                          ),
+                          validator: (v) =>
+                              _validateAddressField(v, 'Rua / Avenida'),
+                          enabled: !isLoading,
                         ),
-                        validator: (v) =>
-                            _validateAddressField(v, 'Rua / Avenida'),
-                        enabled: !isLoading,
                       ),
                       TextFormField(
                         controller: _numberCtrl,
@@ -707,23 +729,31 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                             const InputDecoration(labelText: 'Complemento'),
                         enabled: !isLoading,
                       ),
-                      TextFormField(
-                        controller: _districtCtrl,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: InputDecoration(
-                          labelText: _isEdit ? 'Bairro' : 'Bairro *',
+                      AppFormFieldSpan(
+                        widthFactor: 1.3,
+                        child: TextFormField(
+                          controller: _districtCtrl,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            labelText: _isEdit ? 'Bairro' : 'Bairro *',
+                          ),
+                          validator: (v) =>
+                              _validateAddressField(v, 'Bairro'),
+                          enabled: !isLoading,
                         ),
-                        validator: (v) => _validateAddressField(v, 'Bairro'),
-                        enabled: !isLoading,
                       ),
-                      TextFormField(
-                        controller: _cityCtrl,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: InputDecoration(
-                          labelText: _isEdit ? 'Cidade' : 'Cidade *',
+                      AppFormFieldSpan(
+                        widthFactor: 1.3,
+                        child: TextFormField(
+                          controller: _cityCtrl,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            labelText: _isEdit ? 'Cidade' : 'Cidade *',
+                          ),
+                          validator: (v) =>
+                              _validateAddressField(v, 'Cidade'),
+                          enabled: !isLoading,
                         ),
-                        validator: (v) => _validateAddressField(v, 'Cidade'),
-                        enabled: !isLoading,
                       ),
                       DropdownButtonFormField<String>(
                         initialValue: _stateUf,
