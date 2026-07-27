@@ -2,9 +2,13 @@
 # =============================================================================
 # run_isolation_tests.sh — Fase 1 / T1.4
 #
-# Executa os 12 testes de isolamento SQL gerados por apply_test_uuids.sh
+# Executa os testes de isolamento SQL gerados por apply_test_uuids.sh
 # (test/_generated/) contra o banco informado, e produz um relatório
-# PASS/FAIL consolidado.
+# PASS/FAIL consolidado. O conjunto é dinâmico — quem decide quais arquivos
+# entram é o apply_test_uuids.sh (glob 0002–NNNN, menos o 0006 manual).
+#
+# Este script varre test/_generated/*.sql — quem decide o conjunto é o
+# apply_test_uuids.sh. Rode-o novamente sempre que criar um teste novo.
 #
 # Uso:
 #   ./scripts/apply_test_uuids.sh   # gera test/_generated/ primeiro
@@ -43,7 +47,10 @@ for f in "$GEN_DIR"/*.sql; do
   output=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f" 2>&1)
   status=$?
 
-  echo "$output" | grep -E "NOTICE:|ERROR:" >> "$REPORT_FILE"
+  # Antes só pegava NOTICE:/ERROR:, o que escondia falhas de conexão do psql
+  # (que vêm como "psql: error:" ou "FATAL:") — um teste podia falhar com
+  # exit != 0 e o relatório não mostrar nenhuma pista do motivo real.
+  echo "$output" | grep -E "NOTICE:|ERROR:|FATAL:|psql: error:" >> "$REPORT_FILE"
 
   if [ $status -ne 0 ] && ! echo "$output" | grep -q "Dados de teste revertidos"; then
     echo "RESULTADO: FALHOU (exit=$status)" >> "$REPORT_FILE"

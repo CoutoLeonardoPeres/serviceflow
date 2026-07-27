@@ -22,6 +22,7 @@ flutter build web \
 
 cp "$ROOT_DIR/web/.htaccess" "$ROOT_DIR/build/web/.htaccess"
 
+mkdir -p "$ROOT_DIR/dist"
 rm -f "$OUTPUT_PATH"
 (
   cd "$ROOT_DIR/build/web"

@@ -34,10 +34,14 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- SETUP (sem RLS: superuser/service role): cliente, chamado, orcamento
   -- ─────────────────────────────────────────────────────────────────────────
+  SET LOCAL role = authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', :'USER_ALPHA')::text, true);
   INSERT INTO customers (tenant_id, type, name, is_active)
   VALUES (:'TENANT_ALPHA', 'company', 'Cliente OS Alpha', true)
   RETURNING id INTO v_customer_alpha;
 
+  SET LOCAL role = authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', :'USER_ALPHA')::text, true);
   INSERT INTO service_requests (
     tenant_id, number, customer_id, title, description, channel, status
   ) VALUES (
@@ -147,7 +151,11 @@ BEGIN
   RAISE EXCEPTION 'ROLLBACK_TEST_DATA' USING DETAIL = 'Dados de teste removidos.';
 
 EXCEPTION
-  WHEN SQLSTATE 'P0001' AND SQLERRM = 'ROLLBACK_TEST_DATA' THEN
-    RAISE NOTICE 'Dados de teste revertidos (rollback intencional).';
+  WHEN SQLSTATE 'P0001' THEN
+    IF SQLERRM = 'ROLLBACK_TEST_DATA' THEN
+      RAISE NOTICE 'Dados de teste revertidos (rollback intencional).';
+    ELSE
+      RAISE;
+    END IF;
 END;
 $$;

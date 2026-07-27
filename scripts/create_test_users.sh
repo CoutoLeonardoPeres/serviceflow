@@ -28,28 +28,40 @@ set -euo pipefail
 
 PASSWORD="${TEST_USER_PASSWORD:-ServiceFlow!Teste2026}"
 
-declare -A USERS=(
-  ["alpha_owner"]="alpha.owner.teste@serviceflow.local"
-  ["alpha_tech"]="alpha.tech.teste@serviceflow.local"
-  ["alpha_viewer"]="alpha.viewer.teste@serviceflow.local"
-  ["alpha_analyst"]="alpha.analyst.teste@serviceflow.local"
-  ["beta_owner"]="beta.owner.teste@serviceflow.local"
+# Arrays indexados (não associativos) de propósito: o bash padrão do macOS é
+# 3.2 (licenciamento da Apple) e não suporta `declare -A` (só existe a partir
+# do bash 4). A sintaxe `["chave"]=valor` nesse bash é mal interpretada como
+# índice numérico referenciando uma variável de mesmo nome, e falha com
+# "unbound variable" sob `set -u`, sem criar nenhum usuário. Duas listas
+# paralelas funcionam em qualquer bash 3+.
+USER_KEYS=(alpha_owner alpha_tech alpha_viewer alpha_analyst beta_owner)
+USER_EMAILS=(
+  "alpha.owner.teste@serviceflow.local"
+  "alpha.tech.teste@serviceflow.local"
+  "alpha.viewer.teste@serviceflow.local"
+  "alpha.analyst.teste@serviceflow.local"
+  "beta.owner.teste@serviceflow.local"
 )
 
 echo "== Criando 5 usuários de teste em $SUPABASE_URL =="
 echo
 
-declare -A RESULT_IDS
+RESULT_KEYS=()
+RESULT_IDS=()
 
-for key in "${!USERS[@]}"; do
-  email="${USERS[$key]}"
+for i in "${!USER_KEYS[@]}"; do
+  key="${USER_KEYS[$i]}"
+  email="${USER_EMAILS[$i]}"
   response=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/admin/users" \
     -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
     -H "Content-Type: application/json" \
     -d "{\"email\":\"$email\",\"password\":\"$PASSWORD\",\"email_confirm\":true}")
 
-  user_id=$(echo "$response" | grep -o '"id":"[a-f0-9-]*"' | head -1 | cut -d'"' -f4)
+  # `|| true` é necessário: sob set -e + pipefail, se a chave for inválida a
+  # resposta não tem "id" e o grep sai com status 1, o que mataria o script
+  # inteiro aqui mesmo, antes de imprimir o aviso abaixo.
+  user_id=$(echo "$response" | grep -o '"id":"[a-f0-9-]*"' | head -1 | cut -d'"' -f4 || true)
 
   if [ -z "$user_id" ]; then
     echo "AVISO: falha ao criar $email (talvez já exista). Resposta:"
@@ -58,7 +70,8 @@ for key in "${!USERS[@]}"; do
     continue
   fi
 
-  RESULT_IDS["$key"]="$user_id"
+  RESULT_KEYS+=("$key")
+  RESULT_IDS+=("$user_id")
   echo "OK: $key -> $email -> $user_id"
 done
 
@@ -66,8 +79,8 @@ echo
 echo "== Resumo (guarde estes valores) =="
 echo "Senha usada para todos: $PASSWORD"
 echo
-for key in "${!RESULT_IDS[@]}"; do
-  echo "$key = ${RESULT_IDS[$key]}"
+for i in "${!RESULT_KEYS[@]}"; do
+  echo "${RESULT_KEYS[$i]} = ${RESULT_IDS[$i]}"
 done
 
 echo

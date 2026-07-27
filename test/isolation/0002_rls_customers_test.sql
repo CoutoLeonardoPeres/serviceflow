@@ -32,10 +32,22 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- SETUP: Inserir clientes diretamente (service role, sem RLS) para seed
   -- ─────────────────────────────────────────────────────────────────────────
+  SET LOCAL role = authenticated;
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', :'USER_ALPHA')::text,
+    true
+  );
   INSERT INTO customers (tenant_id, type, name, is_active)
   VALUES (:'TENANT_ALPHA', 'company', 'Cliente Alpha 1', true)
   RETURNING id INTO v_cid_alpha;
 
+  SET LOCAL role = authenticated;
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', :'USER_BETA')::text,
+    true
+  );
   INSERT INTO customers (tenant_id, type, name, is_active)
   VALUES (:'TENANT_BETA', 'company', 'Cliente Beta 1', true)
   RETURNING id INTO v_cid_beta;
@@ -92,14 +104,15 @@ BEGIN
   END IF;
   RAISE NOTICE 'PASSOU T3: technician vê % cliente(s) do próprio tenant', v_count;
 
-  -- Tentativa de UPDATE por technician deve falhar (sem customers.write)
-  BEGIN
-    UPDATE customers SET notes = 'hack' WHERE id = v_cid_alpha;
+  -- Tentativa de UPDATE por technician deve falhar (sem customers.write).
+  -- RLS em UPDATE não lança exceção quando a policy filtra a linha — só
+  -- afeta 0 linhas (ROW_COUNT), não é insufficient_privilege/no_data_found.
+  UPDATE customers SET notes = 'hack' WHERE id = v_cid_alpha;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  IF v_count > 0 THEN
     RAISE EXCEPTION 'FALHOU T4: technician conseguiu fazer UPDATE em customer';
-  EXCEPTION
-    WHEN insufficient_privilege OR no_data_found THEN
-      RAISE NOTICE 'PASSOU T4: UPDATE por technician foi bloqueado (esperado)';
-  END;
+  END IF;
+  RAISE NOTICE 'PASSOU T4: UPDATE por technician foi bloqueado (esperado)';
 
   -- ─────────────────────────────────────────────────────────────────────────
   -- T5: viewer do tenant alpha vê clientes mas não cria
@@ -147,8 +160,18 @@ BEGIN
 
   -- ─────────────────────────────────────────────────────────────────────────
   -- T8: document único por tenant — duplicata deve falhar
+  --
+  -- NOTA: o trigger _sf_set_customer_meta() sempre sobrescreve tenant_id pelo
+  -- current_tenant_id() do usuário autenticado simulado — o valor de tenant_id
+  -- passado explicitamente no INSERT é ignorado (proposital: tenant_id nunca é
+  -- aceito cegamente do cliente). Por isso cada INSERT abaixo precisa simular
+  -- o dono do tenant correto ANTES de rodar, em vez de só um RESET role no
+  -- início do bloco — um RESET role sozinho deixaria o claim JWT anterior
+  -- (do T7, beta_owner) ainda "pendurado" na transação, gravando tudo como
+  -- Beta silenciosamente em vez de falhar visivelmente.
   -- ─────────────────────────────────────────────────────────────────────────
-  RESET role;
+  SET LOCAL role = authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', :'USER_ALPHA')::text, true);
 
   -- Inserir cliente com documento específico
   INSERT INTO customers (tenant_id, type, name, document, is_active)
@@ -165,6 +188,8 @@ BEGIN
   END;
 
   -- Mesmo documento em tenant diferente deve ser permitido
+  SET LOCAL role = authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', :'USER_BETA')::text, true);
   INSERT INTO customers (tenant_id, type, name, document, is_active)
   VALUES (:'TENANT_BETA', 'company', 'Empresa Dup Beta', '11222333000181', true);
   RAISE NOTICE 'PASSOU T9: mesmo documento em tenant diferente é permitido';
@@ -172,6 +197,8 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- T9B: phone único por tenant — duplicata deve falhar
   -- ─────────────────────────────────────────────────────────────────────────
+  SET LOCAL role = authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', :'USER_ALPHA')::text, true);
   INSERT INTO customers (tenant_id, type, name, phone, is_active)
   VALUES (:'TENANT_ALPHA', 'company', 'Empresa Fone A', '11999999999', true);
 
@@ -184,6 +211,8 @@ BEGIN
       RAISE NOTICE 'PASSOU T9B: telefone duplicado no mesmo tenant foi bloqueado';
   END;
 
+  SET LOCAL role = authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', :'USER_BETA')::text, true);
   INSERT INTO customers (tenant_id, type, name, phone, is_active)
   VALUES (:'TENANT_BETA', 'company', 'Empresa Fone Beta', '11999999999', true);
   RAISE NOTICE 'PASSOU T9C: mesmo telefone em tenant diferente é permitido';
@@ -191,6 +220,8 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- T10: is_primary único por customer (apenas um contato principal)
   -- ─────────────────────────────────────────────────────────────────────────
+  SET LOCAL role = authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', :'USER_ALPHA')::text, true);
   INSERT INTO customer_contacts (tenant_id, customer_id, name, is_primary)
   VALUES (:'TENANT_ALPHA', v_cid_alpha, 'Contato Principal', true);
 
@@ -243,7 +274,11 @@ BEGIN
   RAISE EXCEPTION 'ROLLBACK_TEST_DATA' USING DETAIL = 'Dados de teste removidos.';
 
 EXCEPTION
-  WHEN SQLSTATE 'P0001' AND SQLERRM = 'ROLLBACK_TEST_DATA' THEN
-    RAISE NOTICE 'Dados de teste revertidos (rollback intencional).';
+  WHEN SQLSTATE 'P0001' THEN
+    IF SQLERRM = 'ROLLBACK_TEST_DATA' THEN
+      RAISE NOTICE 'Dados de teste revertidos (rollback intencional).';
+    ELSE
+      RAISE;
+    END IF;
 END;
 $$;

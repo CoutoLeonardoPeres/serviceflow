@@ -28,14 +28,32 @@ DECLARE
 BEGIN
   RAISE NOTICE '=== E4 RLS Service Requests — Inicio ===';
 
+  SET LOCAL role = authenticated;
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', :'USER_ALPHA')::text,
+    true
+  );
   INSERT INTO customers (tenant_id, type, name, is_active)
   VALUES (:'TENANT_ALPHA', 'company', 'Cliente Chamado Alpha', true)
   RETURNING id INTO v_customer_alpha;
 
+  SET LOCAL role = authenticated;
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', :'USER_BETA')::text,
+    true
+  );
   INSERT INTO customers (tenant_id, type, name, is_active)
   VALUES (:'TENANT_BETA', 'company', 'Cliente Chamado Beta', true)
   RETURNING id INTO v_customer_beta;
 
+  SET LOCAL role = authenticated;
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', :'USER_ALPHA')::text,
+    true
+  );
   INSERT INTO service_requests (
     tenant_id, number, customer_id, title, description, channel, status
   ) VALUES (
@@ -43,6 +61,12 @@ BEGIN
     'Descricao suficiente para teste alpha.', 'phone', 'opened'
   ) RETURNING id INTO v_request_alpha;
 
+  SET LOCAL role = authenticated;
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', :'USER_BETA')::text,
+    true
+  );
   INSERT INTO service_requests (
     tenant_id, number, customer_id, title, description, channel, status
   ) VALUES (
@@ -124,14 +148,15 @@ BEGIN
     true
   );
 
-  BEGIN
-    UPDATE service_requests SET title = 'Alterado por tecnico'
-    WHERE id = v_request_alpha;
+  -- RLS em UPDATE filtra a linha silenciosamente (0 rows), não lança
+  -- insufficient_privilege — checar ROW_COUNT em vez de exceção.
+  UPDATE service_requests SET title = 'Alterado por tecnico'
+  WHERE id = v_request_alpha;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  IF v_count > 0 THEN
     RAISE EXCEPTION 'FALHOU T5: tecnico editou chamado';
-  EXCEPTION
-    WHEN insufficient_privilege THEN
-      RAISE NOTICE 'PASSOU T5: tecnico nao edita chamado';
-  END;
+  END IF;
+  RAISE NOTICE 'PASSOU T5: tecnico nao edita chamado';
 
   RESET role;
 
@@ -159,7 +184,11 @@ BEGIN
   RAISE EXCEPTION 'ROLLBACK_TEST_DATA' USING DETAIL = 'Dados de teste removidos.';
 
 EXCEPTION
-  WHEN SQLSTATE 'P0001' AND SQLERRM = 'ROLLBACK_TEST_DATA' THEN
-    RAISE NOTICE 'Dados de teste revertidos (rollback intencional).';
+  WHEN SQLSTATE 'P0001' THEN
+    IF SQLERRM = 'ROLLBACK_TEST_DATA' THEN
+      RAISE NOTICE 'Dados de teste revertidos (rollback intencional).';
+    ELSE
+      RAISE;
+    END IF;
 END;
 $$;

@@ -25,7 +25,15 @@ echo "1/7 Dependencias"
 flutter pub get
 
 echo "2/7 Analise estatica"
-flutter analyze
+# flutter analyze sai com codigo != 0 para qualquer issue, mesmo so "info"
+# cosmetico (ex.: API deprecated) — sob set -e isso mataria o script aqui
+# mesmo sem erro real. So bloqueia o release se houver "error •" de verdade.
+ANALYZE_OUTPUT="$(flutter analyze 2>&1)" || true
+echo "$ANALYZE_OUTPUT"
+if echo "$ANALYZE_OUTPUT" | grep -q '   error •'; then
+  echo "FALHOU: flutter analyze encontrou erro."
+  exit 1
+fi
 
 echo "3/7 Testes criticos"
 flutter test \

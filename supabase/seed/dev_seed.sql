@@ -37,12 +37,12 @@ DECLARE
   v_viewer_role   uuid;
   v_analyst_role  uuid;
 
-  -- Substitua pelos UUIDs reais dos usuários criados no Supabase Auth:
-  c_alpha_owner   uuid := 'a1000000-0000-4000-8000-000000000001';
-  c_alpha_tech    uuid := 'a1000000-0000-4000-8000-000000000003';
-  c_alpha_viewer  uuid := 'a1000000-0000-4000-8000-000000000004';
-  c_alpha_analyst uuid := 'a1000000-0000-4000-8000-000000000005';
-  c_beta_owner    uuid := 'b2000000-0000-4000-8000-000000000002';
+  -- UUIDs reais dos usuários criados via scripts/create_test_users.sh em 2026-07-26:
+  c_alpha_owner   uuid := '86f2f7bb-8894-4434-9f66-6248f76baf29';
+  c_alpha_tech    uuid := '52046711-d77a-445d-9138-8b302e84a1ca';
+  c_alpha_viewer  uuid := '0d00d588-c4d2-4e79-9a31-ae9aed685e66';
+  c_alpha_analyst uuid := 'c05de9c5-48a3-40a9-98b7-0c11ea2bfea4';
+  c_beta_owner    uuid := '9797a31d-99bf-4eb7-8d9e-43b3494b7aa7';
 BEGIN
   -- Pular se já existir (idempotente)
   IF EXISTS (SELECT 1 FROM tenants WHERE slug = 'empresa-alpha') THEN
@@ -62,6 +62,14 @@ BEGIN
 
   INSERT INTO tenant_settings (tenant_id, display_name)
   VALUES (v_alpha_id, 'Alpha Elétrica');
+
+  -- O seed precisa de 4 membros ativos na Alpha (owner/tech/viewer/analyst)
+  -- para cobrir os testes de isolamento e RBAC. O plano padrão 'starter'
+  -- (0022/0024_tenant_plan_limits.sql) permite só 3 ativos — o trigger
+  -- enforce_tenant_member_limit() bloquearia o 4º INSERT. Update direto de
+  -- plan_key é aceitável aqui por ser seed de dev/teste, não caminho de
+  -- produção (que deve usar a RPC update_current_tenant_plan).
+  UPDATE tenants SET plan_key = 'professional' WHERE id = v_alpha_id;
 
   INSERT INTO tenant_memberships (tenant_id, user_id, role_id, status)
   VALUES
