@@ -65,7 +65,7 @@ class AppFormGrid extends StatelessWidget {
   const AppFormGrid({
     super.key,
     required this.children,
-    this.minFieldWidth = 220,
+    this.minFieldWidth = 180,
     this.spacing = 16,
     this.runSpacing = 16,
   });
@@ -80,7 +80,7 @@ class AppFormGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
-        final columns = (availableWidth / minFieldWidth).floor().clamp(1, 4);
+        final columns = (availableWidth / minFieldWidth).floor().clamp(1, 6);
         final fieldWidth =
             (availableWidth - (spacing * (columns - 1))) / columns;
 
@@ -109,4 +109,69 @@ class AppFormWideField extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       SizedBox(width: double.infinity, child: child);
+}
+
+/// Scaffold de formulário sem AppBar: seta de voltar + título inline no topo
+/// do conteúdo rolável, e um botão de ação fixo em faixa cheia no rodapé.
+/// Substitui o padrão Scaffold(appBar: ...) + botão dentro do scroll nas
+/// telas de formulário — ver referência de layout em customer_form_screen.
+class AppFormScaffold extends StatelessWidget {
+  const AppFormScaffold({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.actionLabel,
+    required this.onAction,
+    this.actionLoading = false,
+  });
+
+  final String title;
+  final Widget body;
+  final String actionLabel;
+  final VoidCallback? onAction;
+  final bool actionLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: body),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: ElevatedButton(
+          onPressed: actionLoading ? null : onAction,
+          child: actionLoading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : Text(actionLabel),
+        ),
+      ),
+    );
+  }
 }

@@ -5,6 +5,7 @@ import '../plans/tenant_plan.dart';
 import 'onboarding_access_override_stub.dart'
     if (dart.library.html) 'onboarding_access_override_web.dart';
 
+import '../../features/marketing/presentation/public_plans_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/invitation_accept_screen.dart';
@@ -153,6 +154,7 @@ String? appRedirectTarget({
   if (isAuthLoading) return null;
 
   final publicRoutes = {
+    AppRoutes.splash,
     AppRoutes.login,
     AppRoutes.acceptInvitation,
     AppRoutes.forgotPassword,
@@ -265,6 +267,21 @@ TenantFeature? featureForRoute(String currentPath) {
   return null;
 }
 
+/// Tela raiz ('/'). Visitante não autenticado vê a vitrine pública de
+/// planos; autenticado vê o splash por um instante até o redirect (acima)
+/// mandar pro dashboard.
+class RootScreen extends ConsumerWidget {
+  const RootScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authAsync = ref.watch(authStateProvider);
+    if (authAsync.isLoading) return const SplashScreen();
+    final isAuthenticated = ref.watch(isAuthenticatedProvider);
+    return isAuthenticated ? const SplashScreen() : const PublicPlansScreen();
+  }
+}
+
 // ── Provider do router ────────────────────────────────────────────────────────
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -295,7 +312,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: AppRoutes.splash,
-        builder: (_, __) => const SplashScreen(),
+        builder: (_, __) => const RootScreen(),
       ),
       GoRoute(
         path: AppRoutes.login,

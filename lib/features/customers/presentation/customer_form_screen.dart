@@ -784,19 +784,6 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                 enabled: !isLoading,
               ),
             ),
-            const SizedBox(height: 32),
-
-            // ── Botão salvar ───────────────────────────────────────────
-            ElevatedButton(
-              onPressed: isLoading ? null : _submit,
-              child: isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    )
-                  : Text(_isEdit ? 'Salvar alterações' : 'Criar cliente'),
-            ),
           ],
         ),
       ),
@@ -804,17 +791,12 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
 
     if (widget.embedded) return form;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEdit ? 'Editar cliente' : 'Novo cliente'),
-        actions: [
-          TextButton(
-            onPressed: isLoading ? null : _submit,
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
+    return AppFormScaffold(
+      title: _isEdit ? 'Editar cliente' : 'Novo cliente',
       body: form,
+      actionLabel: _isEdit ? 'Salvar alterações' : 'Cadastrar cliente',
+      onAction: isLoading ? null : _submit,
+      actionLoading: isLoading,
     );
   }
 }
