@@ -11,6 +11,9 @@ dart_defines/*.json
 /rename_test2.txt
 /test_delete_me.txt
 *.save
+# Placeholders deixados pelo mount FUSE quando um arquivo é reescrito in-place
+# enquanto ainda está aberto. Somem sozinhos; nunca devem ser versionados.
+.fuse_hidden*
 
 # ── Dados reais de clientes (PII) — nunca versionar ──────────────────────────
 scripts/import_customers_*.sql
@@ -64,3 +67,8 @@ app.*.map.json
 # ── Supabase ──────────────────────────────────────────────────────────────────
 supabase/.temp/
 supabase/functions/.cache/
+
+# ── Build/deploy e ferramentas locais — nunca versionar ──────────────────────
+/dist/
+graphify-out/
+.claude/

@@ -63,6 +63,27 @@ Superfícies: app Flutter (web/mobile), PostgREST sob RLS, Edge Functions, pági
 | Cliente de link público acessa outros dados | Escopo do token limitado a uma entidade/ação; Edge Function valida escopo a cada chamada |
 | platform_admin abusa de acesso | Segregação: sem acesso default a dados de tenant; fluxo break-glass auditado |
 
+## Endpoints anônimos em produção (inventário)
+
+Toda escrita sem autenticação precisa constar aqui. Hoje são dois, ambos via
+RPC `SECURITY DEFINER` com token opaco — nunca via PostgREST direto.
+
+| Endpoint | Migration | Escrita | Mitigações ativas | Lacunas aceitas |
+|---|---|---|---|---|
+| `decide_public_quotation` | 0006 | Decisão de orçamento | Token 256 bits, hash SHA-256, expiração 15d, revogação, escopo de 1 orçamento | Rate limit por IP não implementado |
+| `submit_public_satisfaction` | 0041 | Nota de satisfação | Token 256 bits, hash SHA-256, expiração 30d, revogação, escopo de 1 OS, só OS concluída, dados mínimos na leitura | Rate limit por IP não implementado; resposta não é única (permite correção enquanto o link valer) |
+
+**Divergência conhecida do quadro S (linha "Falsidade em link público"):** aquele
+quadro prevê *rate limit por IP+token* como mitigação padrão. Nenhum dos dois
+endpoints o implementa hoje — exigiria uma Edge Function na frente do RPC.
+Decisão registrada em F2-P5; risco residual: um token válido vazado (ex.: print
+de WhatsApp encaminhado) permite reenvio/alteração da resposta até expirar.
+Impacto limitado a uma OS e sem exposição de dados. **Reavaliar antes do GA.**
+
+Para a pesquisa de satisfação, `get_public_satisfaction_context` devolve apenas
+número da OS, título do serviço e nome da empresa. Não expõe valores, endereço,
+telefone, e-mail nem qualquer identificador do cliente.
+
 ## Testes de segurança obrigatórios (gate de build)
 
 Os 12 testes da especificação (§18): isolamento A↛B leitura/escrita, RBAC técnico×financeiro, cliente×cliente, link expirado/revogado/inválido, upload não autorizado, webhook sem assinatura, idempotência de pagamento/aprovação/consumo.

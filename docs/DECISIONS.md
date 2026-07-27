@@ -50,6 +50,22 @@ Suporte via fluxo break-glass: concessão temporária, escopada e auditada. Impl
 ## ADR-016 — Estoque fora do MVP; materiais da OS sem baixa
 `work_order_materials` registra consumo sem estoque na F1. Na F3, consumo passa a gerar `stock_movements`; migração de dados prevista (expand-and-contract).
 
+**Concluído em F3-P2 (migration 0043), com uma escolha que vale registrar:**
+o vínculo com o catálogo é **opcional**, não obrigatório. O técnico escolhe um
+produto (baixa o saldo, custo vem do médio) ou digita texto livre (só registra
+custo). Exigir catálogo travaria a conclusão da OS quando o cadastro está
+incompleto ou o saldo diverge — e quem paga esse custo é quem está em campo,
+sem acesso ao cadastro. `product_id` nulo identifica o caso, e
+`list_work_order_materials` expõe `from_stock` para que se possa medir quanto do
+consumo ficou fora do controle.
+
+Sobre a migração de dados: os lançamentos históricos ficam com `product_id`
+nulo. **Não** houve tentativa de casar descrição em texto livre com o catálogo
+por similaridade — adivinhar vínculo contábil a partir de texto produziria
+estoque errado com aparência de correto.
+
+O depósito é sempre o padrão do tenant; multi-depósito na OS fica para F3-P4.
+
 ## ADR-017 — Tipo monetário em Dart: int em centavos (sem lib externa no MVP)
 Contexto: ADR-008 mandatou NUMERIC no banco; a camada Dart precisa de representação segura.
 Alternativas: lib `decimal`, `int` em centavos, `BigInt`, `Decimal` do package `decimal`.
@@ -71,6 +87,33 @@ isolamento real somente via SQL local.
 **Consequências:** cada entrega adiciona um arquivo `<n>_rls_<módulo>_test.sql`; exige
 Docker na pipeline de CI; setup documentado em `docs/CI_SETUP.md` (a criar na E8).
 
+## ADR-020 — Custo de estoque: média ponderada móvel
+Contexto: F3 exige definir como valorizar saída de material antes de escrever `stock_movements`,
+porque a escolha determina o schema. As três candidatas eram média ponderada móvel, PEPS/FIFO
+e última compra.
+
+**Decisão:** custo médio ponderado móvel, recalculado a cada entrada.
+
+Descartadas:
+- **Última compra** — não é aceita para inventário fiscal no Brasil; serviria só para visão
+  gerencial e exigiria retrabalho quando o cliente precisasse de valoração fiscal.
+- **PEPS/FIFO** — igualmente aceita e mais precisa sob validade ou preço volátil, mas exige
+  camadas de custo por entrada desde o início. Complexidade não justificada para o perfil de
+  material de FSM (peças e insumos, giro baixo, preço estável).
+
+**Consequências:**
+- `stock_balances` guarda `quantity` e `average_unit_cost_cents`; não há camadas por lote.
+- A cada entrada: `novo_custo = (saldo_qtd * custo_atual + entrada_qtd * custo_entrada) /
+  (saldo_qtd + entrada_qtd)`. A saída consome pelo custo médio vigente, sem alterá-lo.
+- O cálculo roda **exclusivamente em RPC no banco** (ADR-003) — nunca no Flutter.
+- Divisão com arredondamento explícito para centavos (ADR-017); o resíduo de arredondamento
+  fica no saldo, não some.
+- Saldo negativo é proibido: a saída que zeraria abaixo de zero é rejeitada, senão o custo
+  médio perde sentido matemático.
+- Se lotes/validade entrarem no F3 (P5), eles servem para **rastreabilidade**, não para
+  valoração — o custo continua sendo o médio. Migrar para PEPS depois exigiria ADR novo e
+  recomposição histórica dos movimentos.
+
 ## ADR-021 — Autenticação do MVP por e-mail e senha
 Contexto: login social, OAuth, SAML e SSO aumentam complexidade, configuração e superfície de ataque antes da validação do fluxo operacional.
 **Decisão:** MVP usa Supabase Auth com e-mail e senha, recuperação de senha e confirmação de e-mail configurável. MFA fica preparado para administradores, mas não obrigatório para todos no MVP.
@@ -86,6 +129,22 @@ Contexto: foi aprovada uma referência visual moderna e futurista com neomorfism
 **Decisão:** adotar neomorfismo controlado na UI: fundo claro frio, painéis elevados, botões suaves, microinterações e animações curtas. Em telas operacionais, densidade, legibilidade, contraste, foco de teclado e estados claros têm prioridade sobre efeito visual.
 **Consequências:** identidade visual distinta sem sacrificar uso diário; componentes devem ser testados em desktop/mobile e com contraste adequado.
 
+## ADR-024 — Rastreabilidade por lote/série opcional por produto
+Contexto: a maioria dos produtos de FSM (parafuso, cabo, conector) não precisa de rastreio individual; só peças com garantia, regulação ou identidade única (compressor, placa, bateria) precisam saber exatamente qual unidade/lote foi para qual OS e cliente.
+**Decisão:** campo `tracking_type` no produto (`none` | `lot` | `serial`), opcional e por produto — não um flag global nem obrigatório para todo `track_stock`. Um produto rastreado escolhe **um** dos dois tipos, não os dois ao mesmo tempo: `lot` para consumíveis com lote de fabricação compartilhado, `serial` para equipamentos com identidade individual (nesse caso, cada movimento fica limitado a quantidade = 1). Lotes/séries são identificados por um código de texto livre (não numérico sequencial), criados sob demanda (find-or-create) na primeira entrada que os referencia. Sem data de validade nesta entrega — é só identificação e rastreabilidade (qual lote/série saiu em qual OS), não controle de vencimento; validade fica para quando houver necessidade real comprovada (YAGNI).
+**Escopo excluído desta entrega:** transferências entre depósitos (`transfer_stock`) não carregam lote/série — ela insere direto em `stock_movements` para preservar conservação exata de valor (ADR-020) e estender isso exigiria replicar a granularidade de lote também em `stock_transfers`/`stock_transfer_items`, aumento de escopo não pedido. Inventário cíclico (`stock_counts`) também não conta por lote — ajusta o agregado do produto, não lotes individuais. Ambos ficam registrados como lacuna conhecida, não como bug.
+**Consequências:** rastreabilidade real (histórico de um lote/série específico) sem redesenhar o modelo de custo médio ponderado por produto — o saldo continua agregado por produto+depósito; lote/série é uma camada de identificação sobre os movimentos, não uma segunda contabilidade de custo paralela.
+
+## ADR-025 — Contas a pagar: geração automática no recebimento, baixa manual simples
+Contexto: a migration 0044 (F3-P3) já deixou registrado que o pedido de compra recebido não gera conta a pagar — o custo entra no estoque, mas o compromisso financeiro fica fora do sistema, dependendo do financeiro lembrar de lançar manualmente. `receivables`/`payment_records` (E8, já em produção) resolvem o lado de receber com baixa manual simples, sem conceito de conta bancária/caixa.
+**Decisão:** `payables` nasce com **criação automática dentro da mesma transação de `receive_purchase_order`** — cada recebimento (total ou parcial) gera a conta a pagar correspondente ao valor recebido, com FK para `purchase_orders`/`purchase_order_items`. Igual a `receivables`, o pagamento (`payable_payments`) é **baixa manual simples**: method livre (pix/transferência/boleto/dinheiro/etc), sem `financial_accounts` (contas bancárias/caixa) nesta entrega — o modelo espelha `receivables`/`payment_records` de propósito, para manter consistência com o que já está em produção em vez de introduzir um segundo padrão.
+**Consequências:** fecha a lacuna que motivou o pedido de F4 (compromisso financeiro nunca mais fica "fora do sistema" por esquecimento) sem redesenhar nem migrar dados de `receivables`/`payment_records`, que continuam como estão. `financial_accounts`/conciliação bancária ficam para uma entrega futura de F4, quando houver necessidade real de reconciliar contra extrato (YAGNI) — layout do plano de contas (`chart_of_accounts`) e centro de custo (`cost_centers`) também ficam fora desta primeira entrega, registrados como pendentes abaixo.
+
+## ADR-026 — DRE simples em regime de caixa, sem plano de contas
+Contexto: `receivables`/`payment_records` (E8) e `payables`/`payable_payments` (F4-P1) já registram tudo que entra e sai de caixa. Um DRE por competência, com CMV alocado por venda e plano de contas, é um projeto grande — mas boa parte do valor de "ver o resultado do mês" já dá para tirar do que existe, sem esperar `financial_accounts`/`chart_of_accounts`.
+**Decisão:** `get_dre_monthly(p_year)` agrega, por mês, receita = soma de `payment_records.amount_cents` (o que o cliente efetivamente pagou) e despesa = soma de `payable_payments.amount_cents` (o que foi efetivamente pago a fornecedores); resultado = receita − despesa. É **regime de caixa** (quando o dinheiro mudou de mão), não competência (quando a venda/compra aconteceu) — meses sem nenhum pagamento simplesmente não aparecem, não são zero-preenchidos. Não tenta ratear CMV por venda individual, não usa plano de contas nem centro de custo: é a fotografia mais simples que já é verdade com os dados que existem hoje.
+**Consequências:** relatório útil imediatamente, sem nenhuma tabela nova (só uma função de leitura sobre `payment_records`/`payable_payments`, ambas já com RLS). Limitação conhecida e aceita: não reflete competência (uma venda fechada em dezembro e paga em janeiro aparece em janeiro), não separa custo fixo de variável, não mostra CMV por produto. Migrar para DRE por competência com plano de contas fica para quando houver demanda real validada (YAGNI) — registrado abaixo.
+
 ## A registrar nas próximas entregas
 - ADR-019: motor de PDF (lib Dart em Edge/Deno vs serviço) (E6).
-- ADR-020: política de custo de estoque — custo médio vs última compra (F3).
+- F4-P3+: `financial_accounts` (contas bancárias/caixa) e como `receivables`/`payment_records`/`payables` passam a se ligar a elas; `bank_reconciliation` (formato de importação de extrato); `chart_of_accounts` e `cost_centers`; `financial_transactions` como possível livro-razão único; DRE por competência com CMV alocado por venda (a partir de `stock_movements`/ADR-020, sem duplicar lógica de custo).

@@ -1,5 +1,859 @@
 # Changelog
 
+## [Validação RLS real de F3-P5/F4-P1/F4-P2 + bug de created_at] — 2026-07-27
+
+Migrations 0047-0049 aplicadas no Supabase remoto e validadas com
+`test/isolation/` 0021-0023 contra o banco real (retomada do runbook de
+staging, E8). 21/21 testes passando.
+
+### Corrigido
+
+- **Bug de produção real**: `stock_movements.created_at` usava `DEFAULT
+  now()`, que no Postgres é fixo por transação inteira — vários movimentos
+  inseridos na mesma transação ficavam com `created_at` idêntico, deixando
+  `ORDER BY created_at` indeterminado. Isso quebrava
+  `_sf_resolve_stock_lot()` (0047): ao decidir se um número de série "está
+  em estoque" pelo último movimento, o empate podia devolver o movimento
+  errado — encontrado pelo teste 0021 T8b (reentrada de série após saída,
+  rejeitada incorretamente). Corrigido em
+  `supabase/migrations/0050_fix_stock_movements_timestamp_ordering.sql`,
+  trocando o default para `clock_timestamp()` (sempre crescente, mesmo
+  dentro da mesma transação). Em uso normal (uma RPC por transação) o bug
+  quase nunca aparecia — mas é real, não só do teste.
+
+## [F4-P2 — DRE simples em regime de caixa] — 2026-07-27
+
+ADR-026 decidido e implementado: relatório de resultado mensal a partir do
+que já existe (`payment_records`, `payable_payments`), sem esperar contas
+bancárias nem plano de contas.
+
+### Adicionado
+
+- `docs/DECISIONS.md`: ADR-026 — receita = `payment_records` pagos,
+  despesa = `payable_payments` pagos, por mês; regime de caixa (não
+  competência); meses sem pagamento não aparecem (sem zero-preenchimento).
+- `supabase/migrations/0049_dre_report.sql`: `get_dre_monthly(p_year)` —
+  função de leitura pura, sem tabela nova, exige `financials.read`.
+- `supabase/rollbacks/0049_dre_report_rollback.sql` (sem perda de dados —
+  só remove a função) + `test/isolation/0023_dre_report_test.sql` (6 casos:
+  agregação correta por mês, resultado = receita − despesa, ano sem
+  movimento não gera linha vazia, ano obrigatório, permissão
+  `financials.read`, isolamento entre tenants).
+- Flutter: `DreMonth`/`dreMonthFromRow`;
+  `FinancialRepository.getDreMonthly`; `DreScreen` com seletor de ano,
+  totais anuais e cartão por mês; nova entrada "DRE" na navegação
+  (reaproveita `TenantFeature.financials`).
+- `test/financials/dre_month_domain_test.dart`.
+
+### Limitação conhecida (aceita, não é bug)
+
+- Regime de caixa, não competência: uma venda fechada em dezembro e paga
+  em janeiro aparece em janeiro. Sem CMV por venda, sem plano de contas,
+  sem centro de custo — ADR-026 documenta isso como corte deliberado.
+
+### Pendente
+
+- `supabase db push` da migration 0049 e execução de
+  `test/isolation/0023` contra o banco real.
+- `flutter analyze`/`flutter test` das mudanças acima (sem Flutter SDK no
+  ambiente de análise).
+
+## [F4-P1 — Contas a pagar automáticas no recebimento] — 2026-07-27
+
+ADR-025 decidido e implementado: fecha a lacuna que a migration 0044 (F3-P3)
+já deixava documentada — o pedido de compra recebido não gerava conta a
+pagar, o compromisso financeiro ficava fora do sistema. Abre a fase F4.
+
+### Adicionado
+
+- `docs/DECISIONS.md`: ADR-025 — `payables` nasce automaticamente dentro
+  da transação de `receive_purchase_order` (cada recebimento soma o valor
+  recebido); baixa manual simples, espelhando `receivables`/`payment_records`
+  (E8), sem introduzir `financial_accounts` nesta entrega.
+- `supabase/migrations/0048_payables.sql`: tabelas `payables` (única por
+  `purchase_order_id`, upsert somando valor a cada recebimento parcial) e
+  `payable_payments`; `_sf_upsert_payable_on_receipt` (chamado só de dentro
+  de `receive_purchase_order`); `register_payable_payment` (baixa manual,
+  reaproveita as permissões `financials.read`/`financials.write` já
+  existentes — nenhuma permissão nova); `list_payables`.
+- `supabase/rollbacks/0048_payables_rollback.sql` (restaura
+  `receive_purchase_order` sem o upsert de payables) +
+  `test/isolation/0022_payables_test.sql` (11 casos: criação automática,
+  soma em recebimentos parciais sucessivos, baixa parcial/total, pagamento
+  acima do saldo bloqueado, payable paga rejeita novo pagamento, sem
+  escrita direta nas tabelas, permissão `financials.write`, isolamento
+  entre tenants, auditoria).
+- Flutter: `Payable`/`payableFromRow` (reaproveita `ReceivableStatus` —
+  mesmo vocabulário aberto/parcial/pago/cancelado, sem duplicar enum);
+  `FinancialRepository.listPayables`/`registerPayablePayment`;
+  `PayablesScreen` com baixa manual, nova entrada "A Pagar" na navegação
+  (reaproveita `TenantFeature.financials`, sem trava de plano nova).
+- `test/financials/payable_domain_test.dart`: `payableFromRow`,
+  `Payable.isOverdue`.
+
+### Fora de escopo (documentado, não é bug)
+
+- `financial_accounts` (contas bancárias/caixa), `bank_reconciliation`,
+  `chart_of_accounts`, `cost_centers`, `financial_transactions` como
+  livro-razão único, DRE — ficam para as próximas entregas de F4.
+- `receivables`/`payment_records` (E8) continuam exatamente como estão,
+  sem migração de dados.
+
+### Pendente
+
+- `supabase db push` da migration 0048 e execução de
+  `test/isolation/0022` contra o banco real.
+- `flutter analyze`/`flutter test` das mudanças acima (sem Flutter SDK no
+  ambiente de análise).
+
+## [F3-P5 — Rastreio opcional de lote/série] — 2026-07-27
+
+ADR-024 decidido e implementado: rastreabilidade opcional por produto,
+sem redesenhar o custo médio ponderado (ADR-020). Fecha a fase F3.
+
+### Adicionado
+
+- `docs/DECISIONS.md`: ADR-024 — rastreio opcional (`none|lot|serial`),
+  obrigatório só para o produto que o dono escolher marcar, sem controle
+  de validade nesta entrega.
+- `supabase/migrations/0047_stock_lot_serial_tracking.sql`: coluna
+  `products.tracking_type`; tabela `stock_lots` (identidade, único
+  case-insensitive por produto); `stock_movements.lot_id`;
+  `_sf_resolve_stock_lot` (find-or-create na entrada, must-exist na
+  saída, serial trava quantidade=1 e uma posse por vez);
+  `record_stock_entry`/`record_stock_exit`/`record_stock_adjustment`/
+  `add_work_order_material` ganham `p_lot_code`; `list_stock_lots` e
+  `get_lot_history` para consulta.
+- `supabase/rollbacks/0047_stock_lot_serial_tracking_rollback.sql` +
+  `test/isolation/0021_stock_lot_serial_test.sql` (12 casos: obrigatoriedade
+  na entrada/saída, reuso de código por case-insensitive, serial
+  rejeitando quantidade≠1 e reentrada antes da saída, `get_lot_history`,
+  isolamento RLS entre tenants).
+- Flutter: `Product.trackingType` (`ProductTrackingType` enum);
+  `StockRepository`/`WorkOrderRepository` ganham `lotCode`/`p_lot_code`
+  em entrada, saída, ajuste e material de OS; dropdown de rastreio no
+  cadastro de produto; campo condicional de lote/série nos diálogos de
+  movimento de estoque e no material da OS (aparece só quando o produto
+  selecionado tem `trackingType != none`); chip de lote no extrato de
+  movimentos, abrindo histórico via `get_lot_history`.
+- `test/stock/stock_domain_test.dart`: testes de
+  `productTrackingTypeFromString`, `tracking_type` em `productFromRow`,
+  `lot_id`/`lot_code` em `stockMovementFromRow`.
+
+### Fora de escopo (documentado, não é bug)
+
+- `transfer_stock` e `stock_counts` não recebem `lot_id` nesta entrega —
+  preservam a conservação exata de valor (ADR-020) e o ajuste agregado,
+  respectivamente.
+
+### Pendente
+
+- `supabase db push` da migration 0047 e execução de `test/isolation/0021`
+  contra o banco real.
+- `flutter analyze`/`flutter test` das mudanças acima (sem Flutter SDK no
+  ambiente de análise).
+
+## [Release check + security preflight corrigidos] — 2026-07-27
+
+Primeira execução real de `scripts/release_check.sh` e
+`scripts/security_preflight.sh`, achou 3 bugs — o mais sério deixava a
+varredura de segredos rodar em falso.
+
+### Corrigido
+
+- `scripts/build_staging.sh`: não criava `dist/` antes do `zip`, falhava
+  com "No such file or directory".
+- `scripts/release_check.sh`: `flutter analyze` sai com código != 0 para
+  qualquer issue, mesmo só "info" cosmético (API deprecated) — sob `set -e`
+  isso matava o script inteiro sem aviso. Agora só bloqueia em erro real.
+- **`scripts/security_preflight.sh` (achado mais sério)**: o passo de busca
+  de segredos usava `rg` (ripgrep), que não está instalado por padrão —
+  `if rg ...` com comando inexistente falha silenciosamente e o `if` trata
+  isso como "não achou nada", pulando a varredura inteira e ainda reportando
+  "OK". Trocado por `grep -r` (sem dependência nova). Em seguida, dois ajustes
+  de precisão: (1) o regex original casava pelo *nome* da variável
+  `SUPABASE_SERVICE_ROLE_KEY`, dando falso positivo em docs/scripts que
+  legitimamente citam o nome sem conter valor real; trocado para casar pelo
+  *formato* de uma chave (JWT de três blocos ou prefixo `sb_secret_`). (2)
+  isso por si só também dava falso positivo na `anon key` (que é pública por
+  design, protegida por RLS) — agora decodifica o payload do JWT e só falha
+  se o claim `role` for `service_role`.
+
+## [Cadastro de categorias e prioridades de chamado] — 2026-07-27
+
+Tabelas `service_categories`/`service_priorities` já existiam desde 0003;
+faltava UI de cadastro (só havia leitura para os dropdowns do formulário de
+chamado).
+
+### Adicionado
+
+- `ServiceRequestRepository`: `listAllCategories`, `createCategory`,
+  `updateCategory`, `listAllPriorities`, `createPriority`, `updatePriority`.
+  Sem `delete*` — as tabelas não têm policy de DELETE (proposital); "excluir"
+  na UI é `UPDATE is_active = false`.
+- `ServiceCategoryScreen`, `ServicePriorityScreen` — CRUD em Configurações →
+  Chamados, rotas `/configuracoes/categorias-chamado` e
+  `/configuracoes/prioridades-chamado`.
+- Providers `serviceCategoriesAllProvider`/`servicePrioritiesAllProvider`
+  (mostram inativos também, diferente dos providers de dropdown existentes).
+
+## [Validação RLS em banco real] — 2026-07-27
+
+Primeira execução de migrations e testes de isolamento contra um Supabase
+real (`pkbluscdssiiumrppmwa`), depois de meses acumulando migrations nunca
+verificadas. Resultado: 18/18 testes automatizados passando, após corrigir 6
+bugs — 5 nos scripts/testes, 1 em código de produção.
+
+### Corrigido
+
+- `scripts/create_test_users.sh`: `declare -A` não funciona no bash 3.2 do
+  macOS — trocado por arrays indexados paralelos. Um `grep|head|cut` sob
+  `pipefail` também matava o script em silêncio quando a chave era inválida
+  (grep sem match = exit 1 = script inteiro aborta antes do aviso); trocado
+  por `|| true`.
+- `scripts/apply_test_uuids.sh`: `:'VAR'` do psql não interpola de forma
+  confiável dentro de `DO $$...$$` (o rastreador de aspas do psql se
+  desalinha com o número de aspas simples do corpo PL/pgSQL). Substituição
+  agora troca `:'VAR'` por literal diretamente no corpo, não só na linha
+  `\set`.
+- `scripts/run_isolation_tests.sh`: relatório só capturava `NOTICE:`/`ERROR:`,
+  escondendo falhas de conexão (`FATAL:`/`psql: error:`).
+- `test/isolation/*.sql` (18 arquivos): `WHEN SQLSTATE 'P0001' AND SQLERRM =
+  ...` não é sintaxe válida de PL/pgSQL (`WHEN` só aceita `OR` entre
+  condições) — trocado por `WHEN SQLSTATE 'P0001' THEN IF SQLERRM = ... THEN
+  ... ELSE RAISE; END IF;`.
+- `test/isolation/0002,0003,0004,0005,0007–0016`: setup inserindo dados
+  direto sem simular o usuário dono do tenant — o trigger de
+  auto-preenchimento de `tenant_id` (`current_tenant_id()`) corretamente
+  rejeitava por design (`tenant_id` nunca é aceito cegamente do cliente).
+  Adicionado `SET LOCAL role = authenticated` + `set_config` do usuário certo
+  antes de cada INSERT de setup.
+- `test/isolation/0002` T4, `0003` T5: RLS em UPDATE não lança exceção
+  quando a policy filtra a linha, só zera `ROW_COUNT` — testes esperavam
+  `insufficient_privilege`. Trocado por `GET DIAGNOSTICS ... ROW_COUNT`.
+- `test/isolation/0014` T2: `cancel_quotation` levanta `P0001` genérico, não
+  `check_violation` — corrigido, com cuidado extra para não engolir o
+  próprio `RAISE EXCEPTION 'FALHOU T2...'` do teste (mesmo código de erro).
+- `test/isolation/0016`: `set_config('request.jwt.claims', ...)` é
+  transaction-local — trocar `SET LOCAL role = anon` sozinho não limpa o
+  claim JWT do usuário simulado anteriormente. T14 lia dados reais porque a
+  sessão "anon" ainda carregava a identidade do técnico. Adicionado
+  `set_config('request.jwt.claims', 'null', true)` antes de cada simulação
+  de `anon`.
+- **`supabase/migrations/0046_fix_material_audit_metadata.sql` (produção)**:
+  `add_work_order_material` chamava `log_audit(..., jsonb_de_detalhes)` no
+  6º argumento (`p_after_data`) em vez do 7º (`p_metadata`) — o log de
+  auditoria gravava, mas com os detalhes (`from_stock`, `warehouse_id` etc.)
+  no campo errado, invisíveis para qualquer consulta que filtre por
+  `metadata`. `CREATE OR REPLACE` sem mudança de aridade, com rollback
+  correspondente.
+
+## [F3-P4 — Transferências, inventário cíclico e multi-depósito na OS] — 2026-07-26
+
+### Adicionado
+
+- `supabase/migrations/0045_transfers_counts_multi_warehouse.sql`:
+  - `stock_transfers` / `stock_transfer_items` — transferência entre depósitos.
+  - `stock_counts` / `stock_count_items` — sessão de inventário cíclico.
+  - RPCs `transfer_stock`, `create_stock_count`, `set_stock_count_quantity`,
+    `apply_stock_count`, `cancel_stock_count`, `list_stock_count_items`.
+  - `add_work_order_material` ganha `p_warehouse_id` opcional.
+- `supabase/rollbacks/0045_transfers_counts_multi_warehouse_rollback.sql`.
+- `test/isolation/0020_transfers_counts_test.sql` — 14 casos.
+- Flutter: `StockTransfer`, `StockCount`, `StockCountItem`, métodos no
+  repositório, telas de transferência e inventário, seletor de depósito no
+  material da OS.
+- Rotas `/estoque/transferencias` e `/estoque/inventario`.
+- `test/stock/stock_transfer_count_test.dart` (20 casos).
+
+### Conservação de valor na transferência
+
+**A transferência não usa `record_stock_exit` + `record_stock_entry`.** Aqueles
+RPCs recalculam custo a partir de `unit_cost`, e `round(qtd × round(V/qtd)) ≠ V`
+no caso geral — cada transferência perderia ou criaria centavos, e o valor total
+do estoque derivaria com o tempo. O valor V é calculado uma vez na origem e
+gravado idêntico no destino.
+
+Os casos T3 e T4 de 0020 usam 3 unidades a R$ 33,33 (valor 9999, não divisível
+por 3) justamente para pegar esse erro: verificam que a soma dos valores dos
+dois depósitos continua exatamente 9999 depois da transferência, e que zerar a
+origem leva o valor integral sem resíduo.
+
+### Ordem de trava para evitar deadlock
+
+Transferências simultâneas A→B e B→A poderiam travar uma à outra. As linhas de
+saldo são travadas sempre na ordem crescente de `warehouse_id`, o que garante
+ordem global consistente.
+
+### Inventário como sessão persistida
+
+Contagem é uma sessão (`open → applied/cancelled`), não ajuste em lote direto: a
+contagem real se estende no tempo, e o registro de quem contou o quê é a
+justificativa auditável do ajuste. `apply_stock_count` reutiliza
+`record_stock_adjustment` — um ajuste por item divergente, sem caminho paralelo
+de escrita. O saldo é **relido na aplicação**, não usa o snapshot da abertura,
+porque pode ter mudado no intervalo.
+
+### Nota técnica — aridade, de novo
+
+`add_work_order_material` foi de 6 para 7 parâmetros. Mesmo cuidado de 0043:
+`DROP FUNCTION` explícito antes de recriar, senão as duas versões coexistem e
+chamadas com 6 argumentos falham com `function is not unique`. É a segunda vez
+que essa função muda de assinatura — o padrão está no README de rollbacks.
+
+---
+
+## [F3-P3 — Fornecedores e pedidos de compra] — 2026-07-26
+
+### Adicionado
+
+- `supabase/migrations/0044_suppliers_purchase_orders.sql`:
+  - `suppliers` (tabela própria — a unificação de parceiros é F5, e acoplar
+    agora amarraria módulos que ainda vão mudar).
+  - `purchase_orders` com ciclo `draft → sent → partially_received → received`
+    e `draft/sent → cancelled`. Numeração por tenant via `next_sequence`.
+  - `purchase_order_items` com `quantity_ordered` / `quantity_received` e
+    CHECK impedindo receber acima do pedido.
+  - RPCs `create_purchase_order`, `send_purchase_order`,
+    `receive_purchase_order`, `cancel_purchase_order`,
+    `list_purchase_order_items`.
+  - Permissões `purchases.read`, `purchases.write`, `purchases.receive`
+    (técnico recebe mercadoria mas não emite pedido), com backfill de grants.
+- `supabase/rollbacks/0044_suppliers_purchase_orders_rollback.sql`.
+- `test/isolation/0019_purchase_orders_test.sql` — 17 casos.
+- Flutter `lib/features/purchases/`: domínio, repositório, providers e telas de
+  fornecedores, lista de pedidos, novo pedido e detalhe com recebimento.
+- Rotas `/compras`, `/compras/novo`, `/compras/fornecedores`,
+  `/compras/pedido/:id` e item "Compras" na navegação.
+- `test/purchases/purchase_order_test.dart` (18 casos).
+
+### Regras que valem registro
+
+- **O pedido não movimenta estoque.** Só o recebimento gera entrada, e com o
+  custo real da nota — não o cotado. Se o preço mudou entre pedido e entrega, o
+  custo médio reflete o que foi pago. O teste T7 de 0019 verifica isso.
+- **Recebimento parcial mantém o pedido aberto**, com a pendência por item.
+- **Pedido com recebimento parcial não pode ser cancelado.** A mercadoria já
+  entrou; cancelar apagaria o rastro de algo que existe fisicamente. Divergência
+  se corrige por ajuste de inventário, que exige `stock.adjust` e motivo.
+- **Receber a mais que o pedido é bloqueado** — é erro de conferência, e deixar
+  passar mascararia divergência com o fornecedor.
+
+### Fronteira com o financeiro
+
+O pedido registra custo mas **não gera conta a pagar** — `payables` não existe
+(previsto para F4). Ligar compra ao contas a pagar é escopo de F4.
+
+### Acoplamento de permissão a observar
+
+`receive_purchase_order` chama `record_stock_entry`, que checa `stock.write` por
+conta própria. Receber exige, na prática, `purchases.receive` **e**
+`stock.write`. Todos os papéis com `purchases.receive` já têm `stock.write` de
+0042; se um papel novo ganhar só a primeira, o recebimento falha com mensagem de
+estoque que não explica a causa. Documentado na própria migration.
+
+---
+
+## [F3-P2 — Consumo da OS gerando movimento de estoque] — 2026-07-26
+
+Fecha o ADR-016, aberto desde a F1: o material lançado na OS agora baixa o
+estoque de verdade.
+
+### Decisão de produto
+
+Vínculo com o catálogo é **opcional**. O técnico escolhe um produto (baixa o
+saldo, custo vem do médio) ou digita texto livre (só registra custo). Travar o
+lançamento quando o cadastro está incompleto ou o saldo diverge penalizaria
+quem está em campo, sem acesso ao cadastro. `from_stock` permite medir quanto
+do consumo ficou fora do controle de estoque.
+
+### Adicionado
+
+- `supabase/migrations/0043_work_order_stock_consumption.sql`:
+  - `work_order_materials` ganha `product_id`, `warehouse_id` e
+    `stock_movement_id` (todos nulos — expand-and-contract).
+  - `add_work_order_material` reescrita com `p_product_id` opcional. Com
+    produto que controla saldo, chama `record_stock_exit` e **sobrescreve o
+    custo digitado pelo custo médio vigente** — o custo do material é o que ele
+    custou à empresa, não o que o técnico estimou.
+  - `list_work_order_materials` devolve `from_stock` por lançamento.
+- `supabase/rollbacks/0043_work_order_stock_consumption_rollback.sql`.
+- `test/isolation/0018_work_order_stock_consumption_test.sql` — 12 casos,
+  incluindo a prova de que saldo insuficiente **aborta o lançamento inteiro**:
+  sem material órfão, sem alteração no total da OS, sem mexer no saldo.
+- `WorkOrderMaterial` + `WorkOrderMaterialResult`, `listMaterials` no
+  repositório, seletor de produto no formulário de material, e
+  `test/work_orders/work_order_material_test.dart` (10 casos).
+
+### Nota técnica — armadilha de aridade
+
+`add_work_order_material` passou de 5 para 6 parâmetros. `CREATE OR REPLACE`
+com aridade diferente **não substitui**: cria uma sobrecarga, e toda chamada
+com 5 argumentos passa a falhar em runtime com `function is not unique`. A
+migration e o rollback fazem `DROP FUNCTION` explícito antes de criar. O caso
+está documentado em `supabase/rollbacks/README.md` para as próximas mudanças de
+assinatura.
+
+### Nota — ordem de rollback
+
+O rollback de 0043 precisa rodar **antes** do de 0042: as colunas novas
+referenciam `products`, `warehouses` e `stock_movements`. Movimentos já gerados
+permanecem no razão após o rollback — a baixa aconteceu de fato, e
+`stock_movements` é append-only.
+
+---
+
+## [F3-P1 — Núcleo do razão de estoque] — 2026-07-26
+
+Primeira entrega da F3. Estabelece o razão de estoque sobre o qual compras,
+consumo de OS e inventário serão construídos.
+
+### Decisões
+
+- **ADR-020 registrado — custo médio ponderado móvel.** Descartadas: última
+  compra (não aceita para inventário fiscal no Brasil) e PEPS/FIFO (exigiria
+  camadas de custo por entrada; complexidade não justificada para material de
+  FSM). Consequências e caminho de migração futura em `docs/DECISIONS.md`.
+- **Estoque liberado em todos os planos** (`TenantFeature.stock` em starter,
+  professional, business e enterprise).
+
+### Adicionado
+
+- `supabase/migrations/0042_stock_ledger.sql`:
+  - `products` (sku único por tenant, unidade, `track_stock`, `min_quantity`),
+    `warehouses` (um padrão por tenant via índice parcial único).
+  - `stock_movements` **append-only** — sem policy de UPDATE/DELETE. `quantity`
+    sempre positiva; a direção vem de `kind`. Cada lançamento grava o saldo
+    resultante (`quantity_after`, `value_after_cents`).
+  - `stock_balances` derivado, guardando `quantity` + **`total_value_cents`**.
+    O custo médio é derivado por `stock_average_unit_cost_cents()`, não
+    armazenado — guardar o médio arredondado e recalculá-lo a cada entrada
+    acumularia erro de arredondamento.
+  - RPCs `record_stock_entry`, `record_stock_exit`, `record_stock_adjustment`,
+    `list_stock_balances`. Todos travam a linha de saldo com `FOR UPDATE` antes
+    de ler; sem isso, duas saídas simultâneas passariam ambas pela checagem e
+    deixariam o saldo negativo.
+  - Permissões `stock.read`, `stock.write`, `stock.adjust` (ajuste é mais
+    restrito: sobrepõe o cálculo do sistema), com grants para os papéis
+    existentes.
+- `supabase/rollbacks/0042_stock_ledger_rollback.sql`.
+- `test/isolation/0017_stock_ledger_test.sql` — 16 casos: custo médio conferido
+  contra cálculo manual, saldo negativo bloqueado, resíduo de arredondamento em
+  saldo zerado, imutabilidade dos movimentos, `stock_balances` não gravável
+  direto, técnico sem `stock.adjust`, viewer sem `stock.write`, isolamento entre
+  tenants e auditoria.
+- Flutter `lib/features/stock/`: domínio (`Product`, `Warehouse`,
+  `StockMovement`, `StockBalance`), `StockRepository`, providers, e telas de
+  saldos, extrato e catálogo, com diálogos de entrada/saída/ajuste.
+- Rotas `/estoque`, `/estoque/produtos`, `/estoque/movimentos/:productId` e
+  item "Estoque" na navegação.
+- `test/stock/stock_domain_test.dart` (24 casos) e
+  `test/stock/stock_list_screen_test.dart` (7 casos de widget).
+
+### Corrigido
+
+- `docs/DATA_MODEL.md` afirmava que `work_order_materials` tinha `product_id`.
+  **A coluna nunca foi implementada** em 0009. Documento corrigido; a ligação
+  com o catálogo é escopo do F3-P2 (ADR-016).
+- `.gitignore` — adicionado `.fuse_hidden*`, placeholders que o mount FUSE deixa
+  ao reescrever arquivo aberto e que apareciam como untracked.
+
+### Nota sobre permissões
+
+O grant original de `tenant_owner` em 0001 é um cross join sem filtro,
+executado uma única vez. **Permissões criadas em migrations posteriores não
+chegam sozinhas aos papéis existentes** — 0042 faz backfill explícito. Qualquer
+migration futura que adicione permissão precisa fazer o mesmo.
+
+---
+
+## [Cobertura — Testes de isolamento RLS para as tabelas do F2] — 2026-07-26
+
+A suíte de isolamento parou de acompanhar as migrations em 0014. Nenhuma das
+quatro tabelas criadas no F2 tinha teste de RLS. Como a validação RLS é o
+critério bloqueador de aceite do MVP, rodar a suíte assim daria falsa segurança.
+
+### Adicionado
+
+- `test/isolation/0014_cancellations_history_test.sql` — 7 casos sobre
+  `quotation_status_history` (0036) e as permissões de 0039.
+  **T3 e T4 são testes de regressão da falha corrigida em 0039**: verificam que
+  um técnico, que tem `work_orders.execute` mas não `quotations.write` nem
+  `work_orders.manage`, não consegue cancelar orçamento nem OS. Antes de 0039
+  isso era permitido. Se alguém reverter 0039, estes casos falham.
+- `test/isolation/0015_communications_test.sql` — 9 casos sobre
+  `message_templates` e `communication_logs` (0040): isolamento entre tenants,
+  exigência de `customers.write` para escrita, leitura permitida ao viewer, e
+  imutabilidade dos logs (nem o próprio owner altera ou apaga).
+- `test/isolation/0016_satisfaction_public_link_test.sql` — 16 casos sobre a
+  pesquisa pública (0041), o único caminho de escrita anônima do F2:
+  token em claro nunca persistido (só o SHA-256), contexto público sem dado de
+  cliente (verificado por chave e por conteúdo textual), token inválido /
+  expirado / revogado rejeitado na leitura e na escrita, novo link revogando o
+  anterior, upsert em vez de duplicata, `anon` sem leitura direta da tabela, e
+  auditoria de emissão e resposta.
+
+### Corrigido
+
+- `scripts/apply_test_uuids.sh` — a lista de arquivos era fixa
+  (`000{2,3,4,5,7,8,9}` e `001{0,1,2,3}`), então testes novos ficavam de fora
+  **silenciosamente**: seriam criados, não gerados, não executados, e o runner
+  ainda reportaria sucesso. Trocado por glob numérico com lista explícita de
+  exclusões (só os que exigem execução manual). Esta era a causa raiz da
+  defasagem, não apenas os três testes faltantes.
+- `scripts/run_isolation_tests.sh` — cabeçalho dizia "12 testes" fixo.
+
+### Nota
+
+Nenhum teste foi executado — o ambiente de análise não tem PostgreSQL. A
+execução real contra o banco continua pendente e é bloqueador do MVP.
+
+---
+
+## [Correção — Rollbacks de migration ausentes] — 2026-07-26
+
+Lacuna encontrada ao criar o rollback de 0041: as migrations 0036 a 0040 tinham
+sido escritas sem par de rollback, quebrando a cobertura 1:1 que ia de 0001 a
+0035.
+
+### Adicionado
+
+- `supabase/rollbacks/0036_cancellations_rollback.sql`
+- `supabase/rollbacks/0037_quotation_versioning_rollback.sql`
+- `supabase/rollbacks/0038_work_order_returns_rollback.sql`
+- `supabase/rollbacks/0039_permissions_and_audit_rollback.sql`
+- `supabase/rollbacks/0040_message_templates_rollback.sql`
+- `supabase/rollbacks/README.md` — ordem inversa obrigatória, quais rollbacks
+  perdem dados, e a implicação de segurança de reverter 0039.
+
+### Corrigido
+
+- `supabase/rollbacks/0041_satisfaction_public_survey_rollback.sql` — a versão
+  inicial apenas removia o que 0041 criou, mas 0041 havia substituído
+  `seed_default_message_templates`. Sem restaurar a versão de 0040, o rollback
+  deixaria a função com o template de pesquisa apontando para uma feature
+  removida. Agora restaura a definição original e apaga o template do backfill.
+
+### Notas de execução
+
+- **Ordem inversa é obrigatória.** 0039 substituiu quatro funções de 0036/0037/
+  0038, então seu rollback precisa *restaurar* essas versões, não removê-las.
+  Rodar os rollbacks fora de ordem deixa funções órfãs referenciando colunas já
+  removidas. Avisos no cabeçalho de cada script afetado.
+- **Reverter 0039 reintroduz uma falha de permissão.** Antes de 0039,
+  `cancel_quotation` e `cancel_work_order` checavam apenas a associação ao
+  tenant, não a permissão específica. O rollback restaura esse comportamento e
+  remove as chamadas `log_audit`. Documentado no topo do script e no README.
+- Perdem dados: 0036 (motivos de cancelamento + `quotation_status_history`),
+  0038 (vínculo de retorno), 0040 (templates + `communication_logs`).
+- Nenhum rollback foi executado — ambiente de análise sem PostgreSQL.
+
+---
+
+## [F2-P5 — Pesquisa de satisfação respondida pelo cliente] — 2026-07-26
+
+Fecha o F2. Antes desta entrega a nota de satisfação era digitada pelo técnico
+na tela da OS — um registro interno, não uma pesquisa. Agora o próprio cliente
+responde, por link público.
+
+### Adicionado
+
+- `supabase/migrations/0041_satisfaction_public_survey.sql`:
+  - Tabela `satisfaction_public_links` (token_hash SHA-256, `expires_at`,
+    `revoked_at`, `use_count`, `last_access_at`, `responded_at`). RLS com SELECT
+    restrito ao tenant; nenhuma policy de escrita — toda mutação passa por RPC.
+  - `create_satisfaction_public_link(work_order_id, expires_at)` — exige
+    `work_orders.execute` ou `.manage`, só aceita OS com status `done`, expira em
+    30 dias por padrão e revoga o link anterior da mesma OS. Retorna o token em
+    claro uma única vez; o banco guarda apenas o hash.
+  - `revoke_satisfaction_public_link(work_order_id)`.
+  - `get_public_satisfaction_context(token)` — **anônimo**. Devolve apenas número
+    da OS, título do serviço, nome da empresa e se já houve resposta.
+  - `submit_public_satisfaction(token, rating, contact_name, comment)` —
+    **anônimo**. Tenant e OS derivados do token, nunca do cliente. Grava em
+    `work_order_satisfaction`, registra evento na OS e chama `log_audit`.
+  - Template padrão "Pesquisa de satisfacao" + backfill para tenants que já
+    haviam rodado `seed_default_message_templates`.
+- `supabase/rollbacks/0041_satisfaction_public_survey_rollback.sql`.
+- `lib/features/work_orders/domain/satisfaction_public_context.dart` —
+  `SatisfactionPublicContext` + `satisfactionRatingLabel`.
+- `lib/features/work_orders/presentation/satisfaction_public_screen.dart` —
+  seletor de 1 a 5 estrelas com `Semantics`, nome e comentário opcionais, painel
+  de agradecimento após envio.
+- Rota `/pesquisa/:token`, liberada no redirect do router (sem auth, sem bloqueio
+  por plano).
+- `WorkOrderRepository`: `createSatisfactionPublicLink`,
+  `revokeSatisfactionPublicLink`, `getPublicSatisfactionContext`,
+  `submitPublicSatisfaction`.
+- Botão "Enviar pesquisa" na OS concluída — gera o link e abre o painel de envio
+  com `{{link}}` já preenchido.
+- `showSendMessageSheet(context, messageContext)` em `send_message_panel.dart`,
+  para abrir o painel sem depender do botão.
+- Testes: `test/work_orders/satisfaction_public_context_test.dart` (13 casos) e
+  `test/work_orders/satisfaction_public_screen_test.dart` (7 casos de widget,
+  com repositório falso — nenhum teste toca Supabase).
+
+### Segurança
+
+- Segundo endpoint anônimo de escrita do sistema. Inventário completo e
+  divergências registradas em `docs/THREAT_MODEL.md` § "Endpoints anônimos".
+- Mitigações aplicadas: token opaco de 32 bytes, armazenado só como SHA-256;
+  expiração obrigatória; revogação; escopo de uma única OS; dados mínimos na
+  leitura pública.
+- **Não aplicado (decisão de produto):** rate limit por IP — exigiria Edge
+  Function. Resposta não é única: o cliente pode corrigir a nota enquanto o link
+  valer. Risco residual e recomendação de reavaliação antes do GA registrados no
+  THREAT_MODEL.
+
+---
+
+## [F2-P4 — Testes E2E e widget] — 2026-07-26
+
+### Adicionado
+
+- `test/communications/message_template_test.dart`:
+  - `MessageChannel.fromString` e `.label` para todos os valores.
+  - `MessageTemplate.resolveBody`: substituição completa, variáveis ausentes preservadas, mapa vazio.
+  - `MessageTemplate.resolveSubject`: com variáveis e quando `subject` é null.
+  - `TemplateVars.all` e `TemplateVars.label` para todas as chaves.
+  - `messageTemplateFromRow`: row completo e `is_active` null assume `true`.
+- `test/settings/audit_log_test.dart`:
+  - `actionLabel` para ações de orçamento, OS, cliente e financeiro; ação desconhecida retorna raw.
+  - `entityLabel` para todas as entidades conhecidas; desconhecida retorna raw.
+  - `auditLogEventFromRow`: row completo e row sem campos opcionais.
+- `test/quotations/quotation_version_test.dart`:
+  - `QuotationVersion.label` com `isCurrent=true` (sufixo "(atual)") e `isCurrent=false`.
+  - `quotationVersionFromRow` com `is_current` verdadeiro e falso.
+  - `QuotationStatusEvent` via `quotationStatusEventFromRow` com e sem `notes`.
+
+### Corrigido
+
+Erros de compilação em código de produção de F2-P2/F2-P3, revelados ao executar a suíte:
+
+- `lib/features/communications/data/communication_repository.dart` — `listTemplates` e `listLogs`
+  aplicavam `.eq()` **depois** de `.order()/.limit()`, que retornam `PostgrestTransformBuilder`
+  (sem `.eq()`). Filtros movidos para antes dos transforms; casts `as dynamic` removidos.
+- `lib/features/settings/presentation/audit_log_screen.dart` e
+  `lib/features/communications/presentation/message_template_screen.dart` — usavam
+  `NeomorphicCard`, widget inexistente. Trocado por `NeomorphicPanel` (API idêntica).
+- `lib/features/settings/presentation/audit_log_screen.dart` — lia `AppError.message`;
+  o campo correto é `AppError.userMessage` (nomeado assim para não vazar detalhe técnico).
+- `lib/features/communications/domain/message_template.dart` — `'Valor (R$)'` era interpretado
+  como interpolação de string. Convertido para raw string (`r'...'`).
+
+### Alterado
+
+- `test/work_orders/work_order_detail_screen_test.dart`:
+  - `setUpAll` com `initializeDateFormatting('pt_BR')` — o painel de eventos formata datas com
+    `DateFormat` e lançava `LocaleDataException` sem essa inicialização.
+  - Todos os 6 testes existentes ampliados com overrides para `workOrderEventsProvider` e
+    `customerDetailProvider` (providers adicionados à tela em F2-P1/F2-P3 que estavam ausentes).
+  - 4 novos `testWidgets` cobrindo funcionalidades F2-P1:
+    - Botão "Criar retorno" visível para OS com `status=done`.
+    - Painel de cancelamento exibe motivo e oculta "Criar retorno" para OS cancelada.
+    - Chip "Retorno" visível para OS com `parentWorkOrderId != null`.
+    - Painel de histórico exibe eventos com label e notas.
+- `test/quotations/quotation_detail_screen_test.dart`:
+  - Os 2 testes existentes ampliados com overrides para `quotationVersionsProvider`,
+    `quotationStatusHistoryProvider` e `customerDetailProvider`.
+  - 4 novos `testWidgets` cobrindo funcionalidades F2-P1:
+    - Botão "Cancelar orçamento" visível para status `draft`.
+    - Botão "Cancelar orçamento" ausente para status `approved`.
+    - Botão "Cancelar orçamento" ausente para status `cancelled`.
+    - Painel "Versões do orçamento" exibe versões com label correto (incluindo sufixo "(atual)").
+
+---
+
+## [F2-P3 — Templates de mensagem + Outbox + Registro de comunicação] — 2026-07-25
+
+### Adicionado
+
+- `supabase/migrations/0040_message_templates.sql`:
+  - Tabela `message_templates` (canal, nome, assunto, corpo com variáveis `{{...}}`, is_active, RLS).
+  - Tabela `communication_logs` (cliente, canal, direção, status, preview, entidade relacionada, RLS imutável).
+  - RPC `log_communication(...)` SECURITY DEFINER: valida tenant + `customers.write`, registra
+    comunicação e emite `log_audit('communication.sent')`.
+  - Função `seed_default_message_templates(p_tenant_id)`: insere 5 templates padrão (confirmação
+    de agendamento, orçamento enviado, OS concluída, cobrança pendente, e-mail de orçamento). Idempotente.
+- `lib/features/communications/domain/message_template.dart`:
+  - `MessageTemplate` com `resolveBody/resolveSubject` (substituição de variáveis `{{key}}`).
+  - `MessageChannel` enum (whatsapp, email, generic, phone).
+  - `TemplateVars` com constantes e `label()`.
+- `lib/features/communications/domain/communication_log.dart`: `CommunicationLog` com `statusLabel`.
+- `lib/features/communications/data/communication_repository.dart`:
+  - CRUD de templates: `listTemplates`, `createTemplate`, `updateTemplate`, `deleteTemplate`.
+  - `seedDefaultTemplates()`, `listLogs()`, `logCommunication()`.
+- `lib/features/communications/application/communication_notifier.dart`:
+  - `communicationRepositoryProvider`, `messageTemplatesProvider`,
+    `messageTemplatesByChannelProvider`, `customerCommunicationLogsProvider`,
+    `entityCommunicationLogsProvider`.
+- `lib/features/communications/presentation/send_message_panel.dart`:
+  - `MessageContext` — dados do cliente + contexto da entidade (orçamento, OS, etc.).
+  - `SendMessageButton` — abre `_SendMessageSheet` (bottom sheet).
+  - `_SendMessageSheet` — seletor de canal, filtro de templates por canal, campo de corpo editável,
+    botões "Só copiar" e "Abrir WhatsApp/e-mail"; após envio abre deep link e registra em `communication_logs`.
+- `lib/features/communications/presentation/message_template_screen.dart`:
+  - Listagem por canal com cards, toggle ativo/inativo, exclusão com confirmação.
+  - Formulário `_TemplateForm` com chips de variáveis inseríveis no cursor.
+- Rota `AppRoutes.messageTemplates` (`/configuracoes/templates-mensagem`) no router.
+- Bloco "Templates de mensagem" em `SettingsScreen` com acesso à tela de templates e ação de carga de padrões.
+- Botão "Enviar mensagem" (`SendMessageButton`) integrado em:
+  - Detalhe de cliente (telefone/e-mail do próprio cliente).
+  - Detalhe de OS (busca cliente pelo `customerDetailProvider`, passa `workOrderNumber` e `serviceTitle`).
+  - Detalhe de orçamento (busca cliente pelo `customerDetailProvider`, passa `quotationNumber` e `amount`).
+
+### Pendente (ação do desenvolvedor)
+
+- Aplicar `0040_message_templates.sql` no Supabase.
+- Carregar templates padrão via Configurações → "Carregar templates padrão".
+
+---
+
+## [F2-P2 — Permissões refinadas + Auditoria ampliada + Monitoramento + Backup/restore validado] — 2026-07-25
+
+### Adicionado
+
+- `supabase/migrations/0039_permissions_and_audit.sql`:
+  - `cancel_quotation`: corrigido para verificar `has_permission('quotations.write')` (antes
+    verificava apenas pertencimento ao tenant); adicionado `log_audit('quotation.cancelled')`.
+  - `cancel_work_order`: corrigido para verificar `has_permission('work_orders.manage')` (antes
+    verificava apenas pertencimento ao tenant); adicionado `log_audit('work_order.cancelled')`.
+  - `create_new_quotation_version`: reescrita com `log_audit('quotation.new_version_created')`
+    preservando toda a lógica de versionamento de `0037`.
+  - `create_return_work_order`: reescrita com `log_audit('work_order.return_created')`
+    preservando toda a lógica de retorno de `0038`.
+  - RPC `list_audit_events(p_limit, p_entity, p_action)` SECURITY DEFINER: valida
+    `audit.read`, retorna até 200 eventos do tenant com filtros opcionais por entidade e ação.
+- `lib/features/settings/domain/audit_log_event.dart`: modelo `AuditLogEvent` com
+  `entityLabel` e `actionLabel` em português para todas as ações auditadas.
+- `lib/features/settings/data/audit_log_repository.dart`: `AuditLogRepository.listEvents`.
+- `lib/features/settings/presentation/audit_log_screen.dart`: tela de trilha de auditoria
+  com filtros por entidade (chips horizontais), lista paginada com "Carregar mais",
+  cards neomórficos com ícone por entidade, rótulos legíveis e timestamp formatado.
+- Rota `AppRoutes.auditLog` (`/configuracoes/auditoria`) no router.
+- Bloco "Trilha de auditoria" em `SettingsScreen` visível para owner, admin e platform_admin.
+- `scripts/validate_backup.sh`: dump via `pg_dump`, verificação de tabelas críticas,
+  ausência de segredos, manifesto SHA-256 e restore opcional em banco de destino
+  com contagens pós-restore.
+- `docs/MVP_RELEASE_CHECK.md`: seção de backup/restore com pré-requisitos, cadência
+  recomendada e nota sobre PITR do Supabase Pro.
+
+### Corrigido
+
+- `cancel_quotation` e `cancel_work_order` agora aplicam controle de acesso por permissão
+  RBAC (não apenas por pertencimento ao tenant).
+
+### Pendente (ação do desenvolvedor)
+
+- Aplicar `0039_permissions_and_audit.sql` no Supabase (após 0036, 0037 e 0038).
+- Executar `./scripts/validate_backup.sh` com `SUPABASE_DB_URL` real.
+
+---
+
+## [F2-P1 — Retornos de OS] — 2026-07-25
+
+### Adicionado
+
+- `supabase/migrations/0038_work_order_returns.sql`:
+  - Coluna `parent_work_order_id UUID` em `work_orders` (auto-referência com
+    `ON DELETE SET NULL`); índice parcial `idx_work_orders_parent`.
+  - `event_type` CHECK expandido para incluir `'return_created'`
+    (ALTER TABLE DROP/ADD constraint — expand-and-contract).
+  - RPC `create_return_work_order(p_original_id, p_reason)` SECURITY DEFINER:
+    valida tenant + permissão `work_orders.manage`, exige status `done`,
+    cria OS com título prefixado `[Retorno]`, number via `next_sequence`,
+    status `opened`; registra `return_created` na OS original e `created`
+    na nova OS.
+- `WorkOrder.parentWorkOrderId` e getter `isReturn` no domínio.
+- `workOrderFromRow` lê `parent_work_order_id`.
+- `WorkOrderRepository.createReturn(originalId, reason)`.
+- `WorkOrderEvent.label` suporta `'return_created'` → "Retorno criado".
+- Badge "Retorno" (chip terciário com ícone replay) no cabeçalho da OS de retorno.
+- Botão "Criar retorno" (FilledButton, visível apenas quando `done`) na tela de detalhe.
+- Diálogo reutilizável `_CancelReasonDialog` agora aceita `confirmLabel` e
+  `confirmColor` — botão azul (cor primária) para retorno vs vermelho para cancelamento.
+- Snackbar pós-criação com ação "Abrir" para navegar diretamente à OS de retorno.
+
+### Pendente (ação do desenvolvedor)
+
+- Aplicar `0038_work_order_returns.sql` no Supabase (após 0036 e 0037).
+
+## [F2-P1 — Versionamento de orçamento + Histórico ampliado] — 2026-07-25
+
+### Adicionado
+
+- `supabase/migrations/0037_quotation_versioning.sql`: RPCs
+  `create_new_quotation_version(p_quotation_id, p_items, p_notes)` —
+  cria versão com número sequencial, recalcula totais, atualiza
+  `current_version_id` e registra em `quotation_status_history`;
+  `list_quotation_versions(p_quotation_id)` — retorna todas as versões
+  com flag `is_current`. Ambas SECURITY DEFINER, validam tenant + permissão.
+- `lib/features/quotations/domain/quotation_version.dart`: modelos
+  `QuotationVersion` e `QuotationStatusEvent` + funções `fromRow`.
+- `lib/features/work_orders/domain/work_order_event.dart`: modelo
+  `WorkOrderEvent` com `label` humanizado + `fromRow`.
+- `QuotationRepository.listVersions(quotationId)` e
+  `QuotationRepository.createNewVersion({quotationId, items, notes})`.
+- `QuotationRepository.listStatusHistory(quotationId)` — lê
+  `quotation_status_history` diretamente via PostgREST.
+- `WorkOrderRepository.listEvents(workOrderId)` — lê `work_order_events`.
+- Providers Riverpod: `quotationVersionsProvider`, `quotationStatusHistoryProvider`,
+  `workOrderEventsProvider` (todos autoDispose.family).
+- `_QuotationVersionsPanel`: lista versões com círculo numerado, total e data
+  na tela de detalhe do orçamento.
+- `_QuotationHistoryPanel`: linha do tempo de status com notas e timestamps
+  na tela de detalhe do orçamento.
+- `_WorkOrderEventsPanel`: linha do tempo de eventos com label humanizado
+  na tela de detalhe da OS.
+
+### Corrigido (na migration 0036)
+
+- `work_order_events` usava coluna `kind` (inexistente) → corrigido para
+  `event_type`; faltava `tenant_id` no INSERT → adicionado.
+- `quotation_status_history` não existia como tabela — criada na `0036`
+  com RLS e índice parcial.
+
+### Pendente (ação do desenvolvedor)
+
+- Aplicar `0036_cancellations.sql` e `0037_quotation_versioning.sql` no
+  Supabase remoto (SQL Editor → colar → Run, nessa ordem).
+
+## [F2-P1 — Cancelamentos controlados] — 2026-07-25
+
+### Adicionado
+
+- `supabase/migrations/0036_cancellations.sql`: colunas `cancelled_at TIMESTAMPTZ`
+  e `cancellation_reason TEXT` nas tabelas `quotations` e `work_orders`; índices
+  parciais `idx_quotations_cancelled_at` e `idx_work_orders_cancelled_at` para
+  auditoria; RPCs `cancel_quotation(p_quotation_id, p_reason)` e
+  `cancel_work_order(p_work_order_id, p_reason)` — SECURITY DEFINER, validam
+  tenant membership, status permitido e motivo não-nulo.
+- `Quotation.cancelledAt` e `Quotation.cancellationReason` no modelo de domínio;
+  `quotationFromRow()` atualizado.
+- `WorkOrder.cancelledAt` e `WorkOrder.cancellationReason` no modelo de domínio;
+  `workOrderFromRow()` atualizado.
+- `QuotationRepository.cancel(id, reason)` — chama RPC `cancel_quotation`.
+- `WorkOrderRepository.cancel(id, reason)` — chama RPC `cancel_work_order`.
+- Botão "Cancelar orçamento" na tela `quotation_detail_screen.dart`: visível
+  apenas para status não-terminais; abre `_CancelReasonDialog` com motivo
+  obrigatório (até 300 chars); exibe painel de motivo+data quando cancelado.
+- Botão "Cancelar OS" na tela `work_order_detail_screen.dart`: oculto para
+  `done` e `cancelled`; abre `_CancelReasonDialog`; exibe painel de motivo+data.
+- Widget `_CancelReasonDialog` (StatefulWidget com FormValidator) nas duas telas.
+
+### Regras de negócio
+
+- Orçamentos `approved` ou `cancelled` não podem ser cancelados (exceção P0001).
+- OS `done` ou `cancelled` não podem ser canceladas (exceção P0001).
+- Motivo em branco é rejeitado no banco (antes de persistir).
+- `cancel_quotation` registra em `quotation_status_history`; `cancel_work_order`
+  insere evento `status_changed` em `work_order_events`.
+
+### Pendente (ação do desenvolvedor)
+
+- Aplicar migration `0036_cancellations.sql` no Supabase remoto:
+  SQL Editor → colar conteúdo do arquivo → Run.
+
 ## [F2 — Preparação da publicação em staging] — 2026-07-24
 
 ### Adicionado

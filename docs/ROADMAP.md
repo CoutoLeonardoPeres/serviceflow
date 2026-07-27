@@ -25,9 +25,9 @@ MVP declarado operacional somente com o fluxo completo (cadastro→pagamento) te
 | 2 | Permissões refinadas + auditoria ampliada + monitoramento + backup/restore validado | F2 | G |
 | 3 | Templates de mensagem + outbox + registro de comunicação | F2 | M |
 | 4 | Importação de clientes (CSV), relatórios básicos, testes E2E | F2 | M |
-| 5 | Pesquisa de satisfação simples | F2 | P — base local implementada; aplicar migration remota e validar com usuários reais |
-| 6 | Estoque completo + compras + fornecedores | F3 | GG |
-| 7 | Financeiro completo (pagar, fluxo de caixa, conciliação, DRE) | F4 | GG |
+| 5 | Pesquisa de satisfação simples | F2 | ✅ Concluída 2026-07-26 — resposta pelo próprio cliente via link público (0041); aplicar migration remota e validar com usuários reais |
+| 6 | Estoque completo + compras + fornecedores | F3 | GG — **P1 a P5 concluídas 2026-07-27** (razão com custo médio ADR-020; consumo da OS, ADR-016 fechado; fornecedores + pedidos com recebimento; transferências, inventário cíclico e multi-depósito; rastreio opcional de lote/série por produto, ADR-024). Fase F3 completa. |
+| 7 | Financeiro completo (pagar, fluxo de caixa, conciliação, DRE) | F4 | GG — **P1 e P2 concluídas 2026-07-27** (contas a pagar automáticas no recebimento, ADR-025; DRE simples em regime de caixa sem plano de contas, ADR-026). Resta: contas bancárias/caixa, conciliação, plano de contas, DRE por competência |
 | 8 | Parceiros e repasses | F5 | G |
 | 9 | Contratos, SLA e preventivas | F6 | GG |
 | 10 | Frota | F7 | G |

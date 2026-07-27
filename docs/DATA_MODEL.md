@@ -62,7 +62,7 @@ Implementação E6: migration `0005_quotations.sql` cria `quotations`, `quotatio
 - **work_order_items**: espelho dos itens aprovados + ajustes autorizados.
 - **work_order_assignments**: work_order_id, user_id, role (`lead|support`).
 - **work_order_time_entries**: work_order_id, technician_id, started_at, ended_at nullable, pauses (tabela filha `time_entry_pauses`), hour_type, cost_rate, sell_rate, approved_by nullable. Check: ended>started. Sobreposição por técnico bloqueada (mesma técnica do agendamento).
-- **work_order_materials**: work_order_id, product_id nullable, description, quantity, unit_cost, unit_price. (Sem estoque no MVP — vira movimento na F3.)
+- **work_order_materials**: work_order_id, description, quantity, unit_cost, unit_price + **`product_id`, `warehouse_id`, `stock_movement_id`** (adicionados em 0043 / F3-P2). Com `product_id` de produto que controla saldo, o lançamento baixa o estoque e o `unit_cost` passa a ser o custo médio vigente. Com `product_id` nulo, é texto livre sem baixa — caminho mantido de propósito (ADR-016).
 - **work_order_expenses**: kind (`travel|toll|parking|meal|lodging|freight|other`), amount, receipt_path nullable.
 - **work_order_evidence**: kind (`photo_before|photo_after|photo|video|document`), storage_path, checksum.
 - **work_order_signatures** (aceite): work_order_id, signer_name, signer_document_partial, signature_image_path, signed_at, ip, user_agent, otp_used.
@@ -98,7 +98,55 @@ Implementação F2 fotos por etapa: migration `0015_quotation_attachments.sql` c
 ## 8. Fases futuras (resumo)
 
 Estoque (F3): warehouses, stock_movements (única fonte de mutação de saldo), stock_balances (derivado), stock_reservations, transfers, counts, adjustments, lots/serials.
-Financeiro (F4): financial_accounts, cost_centers, chart_of_accounts, payables, financial_transactions, bank_reconciliation, cash_closures.
+
+**F3-P1 entregue (migration 0042)** — `products`, `warehouses`, `stock_movements`, `stock_balances`:
+
+- `products`: sku (único por tenant), name, unit, `track_stock` (produto de serviço fica no catálogo sem saldo), min_quantity para alerta, is_active.
+- `warehouses`: name (único por tenant), is_default (no máximo um por tenant, via índice parcial).
+- `stock_movements`: **append-only**, sem policy de UPDATE/DELETE. kind (`in|out|adjustment`), quantity sempre positiva (direção vem de kind), unit_cost/total_cost, e o saldo resultante gravado no próprio movimento (`quantity_after`, `value_after_cents`) para a auditoria reconstruir a linha do tempo sem recalcular.
+- `stock_balances`: derivado, PK lógica (warehouse_id, product_id). Guarda `quantity` e **`total_value_cents`** — não o custo médio. O médio é derivado por `stock_average_unit_cost_cents()`. Guardar o médio arredondado e recalculá-lo a cada entrada acumularia erro; guardando o valor total em centavos inteiros o resíduo fica no saldo (ADR-020).
+- Mutação exclusiva por RPC: `record_stock_entry`, `record_stock_exit`, `record_stock_adjustment`. Todos travam a linha de saldo com `FOR UPDATE` antes de ler — sem isso duas saídas simultâneas passariam ambas pela checagem de saldo.
+- Saldo negativo é proibido. Permissões novas: `stock.read`, `stock.write`, `stock.adjust` (ajuste é mais restrito: sobrepõe o cálculo do sistema).
+
+**F3-P2 entregue (migration 0043)** — `work_order_materials` ganhou `product_id`, `warehouse_id` e `stock_movement_id`. O consumo com produto do catálogo baixa o saldo via `record_stock_exit` e o custo passa a ser o médio vigente. Sem produto, o lançamento é texto livre e não movimenta (ADR-016).
+**F3-P3 entregue (migration 0044)** — `suppliers`, `purchase_orders`, `purchase_order_items`:
+
+- `suppliers`: tabela própria, não reaproveita `customers`. A unificação de parceiros é F5.
+- `purchase_orders`: ciclo `draft → sent → partially_received → received`, `draft/sent → cancelled`. Numeração por tenant. **Não movimenta estoque** — só o recebimento gera entrada.
+- `purchase_order_items`: `quantity_ordered` vs `quantity_received`, com CHECK impedindo receber acima do pedido.
+- `receive_purchase_order` chama `record_stock_entry` com o **custo da nota**, que pode diferir do cotado. Recebimento parcial mantém o pedido aberto; pedido com mercadoria recebida não pode ser cancelado.
+- Permissões: `purchases.read`, `purchases.write`, `purchases.receive`. Receber exige também `stock.write`, por causa da chamada a `record_stock_entry`.
+
+**F3-P4 entregue (migration 0045)** — `stock_transfers`, `stock_transfer_items`, `stock_counts`, `stock_count_items`:
+
+- **Transferência conserva valor exato.** Não usa `record_stock_exit` + `record_stock_entry`: aqueles recalculam custo a partir de `unit_cost`, e `round(qtd × round(V/qtd)) ≠ V`, o que faria o valor total do estoque derivar a cada transferência. O valor sai da origem e entra no destino idêntico, ao centavo.
+- Saldos travados na ordem crescente de `warehouse_id`, para que transferências simultâneas A→B e B→A não deem deadlock.
+- `stock_counts`: sessão de inventário (`open → applied/cancelled`). `apply_stock_count` gera um `record_stock_adjustment` por item divergente e **relê o saldo atual**, não o snapshot da abertura.
+- `add_work_order_material` aceita `p_warehouse_id`; sem ele, usa o padrão do tenant.
+
+**F3-P5 entregue (migration 0047)** — rastreio de lote/série (ADR-024):
+
+- `products.tracking_type` (`none|lot|serial`), opcional e por produto — a maioria não rastreia.
+- `stock_lots`: identidade apenas (código único por produto, case-insensitive), **não** é ledger de custo — a movimentação continua em `stock_movements`/`stock_balances` sob o custo médio ponderado (ADR-020).
+- `stock_movements.lot_id` (FK opcional). Entrada com código novo cria o lote; código existente reutiliza. Saída exige lote já existente. `serial` trava quantidade = 1 e uma posse por vez (entrada rejeitada se o lote ainda está "em estoque"; saída rejeitada se já saiu).
+- **Fora do escopo desta entrega**: `transfer_stock` (preserva conservação exata de valor, ADR-020) e `stock_counts` (ajusta saldo agregado) não recebem `lot_id` — gap documentado, não bug.
+- `list_stock_lots`, `get_lot_history`: consulta, exigem `stock.read`.
+
+Financeiro (F4): financial_accounts, cost_centers, chart_of_accounts, financial_transactions, bank_reconciliation, cash_closures.
+
+**F4-P1 entregue (migration 0048)** — `payables`, `payable_payments` (ADR-025):
+
+- `payables`: nasce **automaticamente** dentro da transação de `receive_purchase_order` — cada recebimento (total ou parcial) soma o valor recebido na conta a pagar do pedido (`ON CONFLICT (tenant_id, purchase_order_id)`), não existe inserção manual nesta entrega. `due_date` é um prazo fixo de 30 dias (não há campo de prazo por fornecedor ainda).
+- `payable_payments`: baixa manual simples, espelha `payment_records` (0013) — method livre, sem `financial_accounts`. Reaproveita as permissões `financials.read`/`financials.write` já existentes, sem permissão nova.
+- Mutação exclusiva por RPC: `_sf_upsert_payable_on_receipt` (chamado só de dentro de `receive_purchase_order`) e `register_payable_payment`. Sem policy de INSERT/UPDATE direto — igual ao padrão de `stock_movements`.
+- **Fora do escopo desta entrega**: `financial_accounts` (contas bancárias/caixa), `bank_reconciliation`, `chart_of_accounts`, `cost_centers`, `financial_transactions` como livro-razão único. `receivables`/`payment_records` (E8) continuam exatamente como estão — nenhuma migração de dados.
+
+**F4-P2 entregue (migration 0049)** — `get_dre_monthly(p_year)` (ADR-026):
+
+- Sem tabela nova: função de leitura que agrega `payment_records` (receita) e `payable_payments` (despesa) por mês, dentro do ano informado. Regime de caixa — quando o dinheiro mudou de mão, não quando a venda/compra aconteceu.
+- Meses sem nenhum pagamento não aparecem na resposta (sem zero-preenchimento via `generate_series`); a apresentação no Flutter decide se preenche os buracos.
+- Sem CMV por venda, sem plano de contas, sem centro de custo — é a fotografia mais simples que já é verdade com os dados que existem hoje. DRE por competência fica para quando houver demanda real validada.
+
 Parceiros (F5), Contratos/Preventivas (F6), Frota (F7), Comunicação/outbox (F2/F8), Fiscal (F8: fiscal_profiles, fiscal_documents, fiscal_events, fiscal_provider_requests), Satisfação (F2+: surveys, nps_responses).
 
 ## 9. Máquinas de estado
