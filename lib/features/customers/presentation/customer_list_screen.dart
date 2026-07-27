@@ -94,11 +94,13 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
   }
 
   Future<void> _openCustomerDialog() async {
-    // Página cheia (AppFormScaffold), não diálogo — mesmo padrão de layout
-    // usado no resto do cadastro de cliente. A tela sempre faz pop() ao
-    // voltar (criado ou cancelado); atualizar a lista de novo é barato.
-    await context.push(AppRoutes.customerNew);
-    if (mounted) {
+    final created = await showAppFormDialog<bool>(
+      context: context,
+      title: 'Novo cliente',
+      maxWidth: 1100,
+      child: const CustomerFormScreen(embedded: true),
+    );
+    if (created == true && mounted) {
       ref.read(customerListProvider.notifier).refresh();
     }
   }
@@ -107,6 +109,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
     final updated = await showAppFormDialog<bool>(
       context: context,
       title: 'Editar cliente',
+      maxWidth: 1100,
       child: CustomerFormScreen(customer: customer, embedded: true),
     );
     if (updated == true && mounted) {

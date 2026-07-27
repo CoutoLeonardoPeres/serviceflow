@@ -65,7 +65,7 @@ class AppFormGrid extends StatelessWidget {
   const AppFormGrid({
     super.key,
     required this.children,
-    this.minFieldWidth = 180,
+    this.minFieldWidth = 160,
     this.spacing = 16,
     this.runSpacing = 16,
   });

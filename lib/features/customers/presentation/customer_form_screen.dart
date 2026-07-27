@@ -789,12 +789,37 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
       ),
     );
 
-    if (widget.embedded) return form;
+    final actionLabel = _isEdit ? 'Salvar alterações' : 'Cadastrar cliente';
+    final actionButton = ElevatedButton(
+      onPressed: isLoading ? null : _submit,
+      child: isLoading
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            )
+          : Text(actionLabel),
+    );
+
+    if (widget.embedded) {
+      // Diálogo (showAppFormDialog) já traz título e botão de fechar — só
+      // falta o botão de ação fixo embaixo do conteúdo rolável.
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(child: form),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: actionButton,
+          ),
+        ],
+      );
+    }
 
     return AppFormScaffold(
       title: _isEdit ? 'Editar cliente' : 'Novo cliente',
       body: form,
-      actionLabel: _isEdit ? 'Salvar alterações' : 'Cadastrar cliente',
+      actionLabel: actionLabel,
       onAction: isLoading ? null : _submit,
       actionLoading: isLoading,
     );
