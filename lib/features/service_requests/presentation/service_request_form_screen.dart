@@ -159,23 +159,54 @@ class _ServiceRequestFormScreenState
               children: [
                 AppFormGrid(
                   children: [
-                    customers.when(
-                      loading: () => const LinearProgressIndicator(),
-                      error: (_, __) => const Text('Clientes indisponiveis.'),
-                      data: (items) => _CustomerAutocompleteField(
-                        customers: [
-                          if (_justCreatedCustomer != null)
-                            _justCreatedCustomer!,
-                          ...items.where(
-                            (customer) =>
-                                customer.id != _justCreatedCustomer?.id,
+                    AppFormFieldSpan(
+                      widthFactor: 2.2,
+                      child: customers.when(
+                        loading: () => const LinearProgressIndicator(),
+                        error: (_, __) =>
+                            const Text('Clientes indisponiveis.'),
+                        data: (items) => _CustomerAutocompleteField(
+                          customers: [
+                            if (_justCreatedCustomer != null)
+                              _justCreatedCustomer!,
+                            ...items.where(
+                              (customer) =>
+                                  customer.id != _justCreatedCustomer?.id,
+                            ),
+                          ],
+                          selectedCustomerId: _customerId,
+                          enabled: !isLoading,
+                          onChanged: (value) =>
+                              setState(() => _customerId = value),
+                          onCreateCustomer: _openCreateCustomerDialog,
+                          trailing: priorities.when(
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                            data: (items) => DropdownButtonFormField<String>(
+                              initialValue: _priorityId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Prioridade',
+                              ),
+                              items: [
+                                const DropdownMenuItem<String>(
+                                  value: null,
+                                  child: Text('Sem prioridade'),
+                                ),
+                                ...items.map(
+                                  (priority) => DropdownMenuItem(
+                                    value: priority.id,
+                                    child: Text(priority.name),
+                                  ),
+                                ),
+                              ],
+                              onChanged: isLoading
+                                  ? null
+                                  : (value) =>
+                                      setState(() => _priorityId = value),
+                            ),
                           ),
-                        ],
-                        selectedCustomerId: _customerId,
-                        enabled: !isLoading,
-                        onChanged: (value) =>
-                            setState(() => _customerId = value),
-                        onCreateCustomer: _openCreateCustomerDialog,
+                        ),
                       ),
                     ),
                     TextFormField(
@@ -193,6 +224,7 @@ class _ServiceRequestFormScreenState
                     ),
                     DropdownButtonFormField<ServiceRequestChannel>(
                       initialValue: _channel,
+                      isExpanded: true,
                       decoration: const InputDecoration(labelText: 'Canal'),
                       items: ServiceRequestChannel.values
                           .map(
@@ -214,6 +246,7 @@ class _ServiceRequestFormScreenState
                       error: (_, __) => const SizedBox.shrink(),
                       data: (items) => DropdownButtonFormField<String>(
                         initialValue: _categoryId,
+                        isExpanded: true,
                         decoration:
                             const InputDecoration(labelText: 'Categoria'),
                         items: [
@@ -231,30 +264,6 @@ class _ServiceRequestFormScreenState
                         onChanged: isLoading
                             ? null
                             : (value) => setState(() => _categoryId = value),
-                      ),
-                    ),
-                    priorities.when(
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
-                      data: (items) => DropdownButtonFormField<String>(
-                        initialValue: _priorityId,
-                        decoration:
-                            const InputDecoration(labelText: 'Prioridade'),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('Sem prioridade'),
-                          ),
-                          ...items.map(
-                            (priority) => DropdownMenuItem(
-                              value: priority.id,
-                              child: Text(priority.name),
-                            ),
-                          ),
-                        ],
-                        onChanged: isLoading
-                            ? null
-                            : (value) => setState(() => _priorityId = value),
                       ),
                     ),
                   ],
@@ -354,6 +363,7 @@ class _CustomerAutocompleteField extends StatelessWidget {
     required this.enabled,
     required this.onChanged,
     required this.onCreateCustomer,
+    this.trailing,
   });
 
   final List<Customer> customers;
@@ -361,6 +371,7 @@ class _CustomerAutocompleteField extends StatelessWidget {
   final bool enabled;
   final ValueChanged<String?> onChanged;
   final Future<void> Function() onCreateCustomer;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -482,13 +493,19 @@ class _CustomerAutocompleteField extends StatelessWidget {
               },
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: enabled ? onCreateCustomer : null,
-                icon: const Icon(Icons.person_add_alt_1_outlined),
-                label: const Text('Cliente não cadastrado? Novo cliente'),
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                TextButton.icon(
+                  onPressed: enabled ? onCreateCustomer : null,
+                  icon: const Icon(Icons.person_add_alt_1_outlined),
+                  label: const Text('Cliente não cadastrado? Novo cliente'),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 12),
+                  Expanded(child: trailing!),
+                ],
+              ],
             ),
           ],
         );

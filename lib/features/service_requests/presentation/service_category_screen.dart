@@ -3,17 +3,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_error.dart';
 import '../../../core/widgets/app_form_dialog.dart';
+import '../../../core/widgets/app_form_layout.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/neomorphic.dart';
 import '../application/service_request_list_notifier.dart';
 import '../domain/service_category.dart';
 
-/// Cadastro de categorias de chamado.
-class ServiceCategoryScreen extends ConsumerWidget {
+/// Cadastro de categorias de chamado — mesmo padrão visual do cadastro
+/// de profissionais (AppFormSection com busca + cards abaixo).
+class ServiceCategoryScreen extends ConsumerStatefulWidget {
   const ServiceCategoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ServiceCategoryScreen> createState() =>
+      _ServiceCategoryScreenState();
+}
+
+class _ServiceCategoryScreenState extends ConsumerState<ServiceCategoryScreen> {
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(serviceCategoriesAllProvider);
 
     return Scaffold(
@@ -30,20 +46,75 @@ class ServiceCategoryScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(serviceCategoriesAllProvider),
         ),
         data: (categories) {
-          if (categories.isEmpty) {
-            return const EmptyView(
-              icon: Icons.label_outline,
-              message: 'Nenhuma categoria cadastrada.',
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-            itemCount: categories.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, i) => _CategoryCard(
-              category: categories[i],
-              onEdit: () => _openForm(context, ref, category: categories[i]),
-            ),
+          final search = _searchController.text.trim().toLowerCase();
+          final filtered = search.isEmpty
+              ? categories
+              : categories
+                  .where((c) => c.name.toLowerCase().contains(search))
+                  .toList();
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            children: [
+              AppFormSection(
+                title: 'Categorias de chamado',
+                icon: Icons.label_outline,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar categoria',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 16),
+                    NeomorphicInset(
+                      borderRadius: 18,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${categories.length}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('cadastradas'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (filtered.isEmpty)
+                const NeomorphicPanel(
+                  borderRadius: 28,
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('Nenhuma categoria encontrada.'),
+                  ),
+                )
+              else
+                ...filtered.map(
+                  (category) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _CategoryCard(
+                      category: category,
+                      onEdit: () =>
+                          _openForm(context, ref, category: category),
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),

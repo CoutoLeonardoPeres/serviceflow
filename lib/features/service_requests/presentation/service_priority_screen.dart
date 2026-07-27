@@ -3,17 +3,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_error.dart';
 import '../../../core/widgets/app_form_dialog.dart';
+import '../../../core/widgets/app_form_layout.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/neomorphic.dart';
 import '../application/service_request_list_notifier.dart';
 import '../domain/service_priority.dart';
 
-/// Cadastro de prioridades de chamado.
-class ServicePriorityScreen extends ConsumerWidget {
+/// Cadastro de prioridades de chamado — mesmo padrão visual do cadastro
+/// de profissionais (AppFormSection com busca + cards abaixo).
+class ServicePriorityScreen extends ConsumerStatefulWidget {
   const ServicePriorityScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ServicePriorityScreen> createState() =>
+      _ServicePriorityScreenState();
+}
+
+class _ServicePriorityScreenState extends ConsumerState<ServicePriorityScreen> {
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final prioritiesAsync = ref.watch(servicePrioritiesAllProvider);
 
     return Scaffold(
@@ -30,20 +46,75 @@ class ServicePriorityScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(servicePrioritiesAllProvider),
         ),
         data: (priorities) {
-          if (priorities.isEmpty) {
-            return const EmptyView(
-              icon: Icons.flag_outlined,
-              message: 'Nenhuma prioridade cadastrada.',
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-            itemCount: priorities.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, i) => _PriorityCard(
-              priority: priorities[i],
-              onEdit: () => _openForm(context, ref, priority: priorities[i]),
-            ),
+          final search = _searchController.text.trim().toLowerCase();
+          final filtered = search.isEmpty
+              ? priorities
+              : priorities
+                  .where((p) => p.name.toLowerCase().contains(search))
+                  .toList();
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            children: [
+              AppFormSection(
+                title: 'Prioridades de chamado',
+                icon: Icons.flag_outlined,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar prioridade',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 16),
+                    NeomorphicInset(
+                      borderRadius: 18,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${priorities.length}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('cadastradas'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (filtered.isEmpty)
+                const NeomorphicPanel(
+                  borderRadius: 28,
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('Nenhuma prioridade encontrada.'),
+                  ),
+                )
+              else
+                ...filtered.map(
+                  (priority) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _PriorityCard(
+                      priority: priority,
+                      onEdit: () =>
+                          _openForm(context, ref, priority: priority),
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),
