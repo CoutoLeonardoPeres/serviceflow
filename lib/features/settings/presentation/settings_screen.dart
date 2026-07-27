@@ -15,7 +15,9 @@ import '../../../core/widgets/neomorphic.dart';
 import '../../../shared/providers/supabase_provider.dart';
 import '../../../shared/providers/tenant_provider.dart';
 import '../../professionals/application/service_professional_list_notifier.dart';
+import '../../professionals/domain/professional_categories.dart';
 import '../../professionals/domain/service_professional.dart';
+import '../../service_requests/application/service_request_list_notifier.dart';
 import '../../settings/data/settings_repository.dart';
 import '../../settings/data/member_management_repository.dart';
 import '../../settings/data/tenant_unit_repository.dart';
@@ -236,6 +238,63 @@ class SettingsScreen extends ConsumerWidget {
               ref.invalidate(tenantCheckoutSessionsProvider);
               ref.invalidate(tenantBillingWebhookEventsProvider);
             },
+          ),
+          const SizedBox(height: 16),
+          // Fica fora do settingsAsync.when de propósito: não depende das
+          // configurações da empresa e some da tela se aquele provider falhar.
+          AppFormSection(
+            title: 'Chamados',
+            icon: Icons.confirmation_number_outlined,
+            child: Column(
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.label_outline),
+                  title: const Text('Categorias'),
+                  subtitle: const Text(
+                    'Categorias usadas na abertura de chamados.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(AppRoutes.serviceCategories),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.auto_fix_high_outlined),
+                  title: const Text('Carregar categorias padrão'),
+                  subtitle: const Text(
+                    'Importa a mesma lista de especialidades usada no cadastro de profissionais.',
+                  ),
+                  onTap: () async {
+                    final created = await ref
+                        .read(serviceRequestRepositoryProvider)
+                        .seedDefaultCategories(professionalCategories);
+                    ref.invalidate(serviceCategoriesAllProvider);
+                    ref.invalidate(serviceRequestCategoriesProvider);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            created == 0
+                                ? 'Todas as categorias padrão já estavam cadastradas.'
+                                : '$created categoria(s) importada(s).',
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.flag_outlined),
+                  title: const Text('Prioridades'),
+                  subtitle: const Text(
+                    'Níveis de prioridade e SLA de atendimento.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(AppRoutes.servicePriorities),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           settingsAsync.when(
@@ -645,31 +704,6 @@ class SettingsScreen extends ConsumerWidget {
                             );
                           }
                         },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                AppFormSection(
-                  title: 'Chamados',
-                  icon: Icons.confirmation_number_outlined,
-                  child: Column(
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.label_outline),
-                        title: const Text('Categorias'),
-                        subtitle: const Text('Categorias usadas na abertura de chamados.'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push(AppRoutes.serviceCategories),
-                      ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.flag_outlined),
-                        title: const Text('Prioridades'),
-                        subtitle: const Text('Níveis de prioridade e SLA de atendimento.'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push(AppRoutes.servicePriorities),
                       ),
                     ],
                   ),
