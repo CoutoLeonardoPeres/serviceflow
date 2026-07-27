@@ -159,37 +159,44 @@ class _ServiceRequestFormScreenState
               children: [
                 AppFormGrid(
                   children: [
-                    customers.when(
-                      loading: () => const LinearProgressIndicator(),
-                      error: (_, __) => const Text('Clientes indisponiveis.'),
-                      data: (items) => _CustomerAutocompleteField(
-                        customers: [
-                          if (_justCreatedCustomer != null)
-                            _justCreatedCustomer!,
-                          ...items.where(
-                            (customer) =>
-                                customer.id != _justCreatedCustomer?.id,
-                          ),
-                        ],
-                        selectedCustomerId: _customerId,
-                        enabled: !isLoading,
-                        onChanged: (value) =>
-                            setState(() => _customerId = value),
-                        onCreateCustomer: _openCreateCustomerDialog,
+                    AppFormFieldSpan(
+                      widthFactor: 1.5,
+                      child: customers.when(
+                        loading: () => const LinearProgressIndicator(),
+                        error: (_, __) =>
+                            const Text('Clientes indisponiveis.'),
+                        data: (items) => _CustomerAutocompleteField(
+                          customers: [
+                            if (_justCreatedCustomer != null)
+                              _justCreatedCustomer!,
+                            ...items.where(
+                              (customer) =>
+                                  customer.id != _justCreatedCustomer?.id,
+                            ),
+                          ],
+                          selectedCustomerId: _customerId,
+                          enabled: !isLoading,
+                          onChanged: (value) =>
+                              setState(() => _customerId = value),
+                          onCreateCustomer: _openCreateCustomerDialog,
+                        ),
                       ),
                     ),
-                    TextFormField(
-                      controller: _titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Título',
-                        hintText: 'Ex.: Ar-condicionado sem refrigerar',
+                    AppFormFieldSpan(
+                      widthFactor: 1.5,
+                      child: TextFormField(
+                        controller: _titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Título',
+                          hintText: 'Ex.: Ar-condicionado sem refrigerar',
+                        ),
+                        textInputAction: TextInputAction.next,
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.length < 3) return 'Informe um título.';
+                          return null;
+                        },
                       ),
-                      textInputAction: TextInputAction.next,
-                      validator: (value) {
-                        final text = value?.trim() ?? '';
-                        if (text.length < 3) return 'Informe um título.';
-                        return null;
-                      },
                     ),
                   ],
                 ),
