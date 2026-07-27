@@ -14,6 +14,9 @@ import '../../service_requests/application/service_request_list_notifier.dart';
 import '../../service_requests/data/service_request_repository.dart';
 import '../../service_requests/domain/service_request.dart';
 import '../../service_requests/presentation/service_request_form_screen.dart';
+import '../../settings/domain/schedule_models.dart';
+import '../../settings/presentation/settings_screen.dart'
+    show companySettingsProvider;
 import '../../work_orders/application/work_order_list_notifier.dart';
 import '../../work_orders/domain/work_order.dart';
 import '../../work_orders/presentation/work_order_form_screen.dart';
@@ -152,6 +155,10 @@ class _AppointmentListScreenState extends ConsumerState<AppointmentListScreen> {
               appointmentsByDay: appointmentsByDay,
               onDayTap: (day) => _openScheduleDialog(
                   day, appointmentsByDay[day.day] ?? const []),
+              weeklySchedule: ref.watch(companySettingsProvider).maybeWhen(
+                    data: (settings) => settings.weeklySchedule,
+                    orElse: defaultWeeklySchedule,
+                  ),
             ),
           ],
         ),
@@ -375,7 +382,9 @@ class _LegendRow extends StatelessWidget {
         _LegendItem(color: Color(0xFFA9DADB), label: 'Livre'),
         _LegendItem(color: Color(0xFFB77A9B), label: 'Ocupado'),
         _LegendItem(color: Color(0xFFAEB8C4), label: 'Fechado'),
-        Text('Manhã | Tarde | Noite'),
+        _LegendItem(color: _kQuoteColor, label: 'Orçamento'),
+        _LegendItem(color: _kWorkOrderColor, label: 'Ordem de serviço'),
+        Text('Manhã (esq.) | Tarde (dir.) | Noite (abaixo)'),
       ],
     );
   }
@@ -412,11 +421,13 @@ class _CalendarGrid extends StatelessWidget {
     required this.month,
     required this.appointmentsByDay,
     required this.onDayTap,
+    required this.weeklySchedule,
   });
 
   final DateTime month;
   final Map<int, List<Appointment>> appointmentsByDay;
   final ValueChanged<DateTime> onDayTap;
+  final Map<String, DaySchedule> weeklySchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -461,6 +472,9 @@ class _CalendarGrid extends StatelessWidget {
                   appointments: items,
                   isClosed: isClosed,
                   onTap: isClosed ? null : () => onDayTap(day),
+                  daySchedule:
+                      weeklySchedule[kWeekdayOrder[day.weekday - 1]] ??
+                          defaultDaySchedule(),
                 );
               },
             ),
@@ -497,12 +511,14 @@ class _CalendarDayCard extends StatelessWidget {
     required this.appointments,
     required this.isClosed,
     required this.onTap,
+    required this.daySchedule,
   });
 
   final DateTime day;
   final List<Appointment> appointments;
   final bool isClosed;
   final VoidCallback? onTap;
+  final DaySchedule daySchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -550,6 +566,9 @@ class _CalendarDayCard extends StatelessWidget {
                       ),
                 ),
               ),
+              // Marcadores de ocupação: manhã à esquerda, tarde à direita,
+              // noite embaixo. Só aparecem onde há agendamento.
+              if (!isClosed) ..._occupancyMarkers(),
               if (isClosed)
                 Positioned(
                   right: 6,
@@ -579,6 +598,134 @@ class _CalendarDayCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  List<Widget> _occupancyMarkers() {
+    final morning = <Appointment>[];
+    final afternoon = <Appointment>[];
+    final night = <Appointment>[];
+    for (final appointment in appointments) {
+      switch (_periodOf(appointment.scheduledStart, daySchedule)) {
+        case _DayPeriod.morning:
+          morning.add(appointment);
+        case _DayPeriod.afternoon:
+          afternoon.add(appointment);
+        case _DayPeriod.night:
+          night.add(appointment);
+      }
+    }
+    return [
+      if (morning.isNotEmpty)
+        Positioned(
+          left: 6,
+          top: 6,
+          bottom: 6,
+          child: _MarkerStack(appointments: morning, horizontal: false),
+        ),
+      if (afternoon.isNotEmpty)
+        Positioned(
+          right: 6,
+          top: 6,
+          bottom: 6,
+          child: _MarkerStack(appointments: afternoon, horizontal: false),
+        ),
+      if (night.isNotEmpty)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 5,
+          child: Center(
+            child: _MarkerStack(appointments: night, horizontal: true),
+          ),
+        ),
+    ];
+  }
+}
+
+enum _DayPeriod { morning, afternoon, night }
+
+/// Classifica pelo horário de funcionamento do dia; se o período estiver
+/// desligado ou sem horário definido, cai no corte padrão 12h/18h.
+_DayPeriod _periodOf(DateTime start, DaySchedule schedule) {
+  final minutes = start.hour * 60 + start.minute;
+  bool inside(SchedulePeriod period) {
+    if (!period.enabled) return false;
+    final from = _minutesOf(period.start);
+    final to = _minutesOf(period.end);
+    if (from == null || to == null) return false;
+    return minutes >= from && minutes < to;
+  }
+
+  if (inside(schedule.morning)) return _DayPeriod.morning;
+  if (inside(schedule.afternoon)) return _DayPeriod.afternoon;
+  if (inside(schedule.night)) return _DayPeriod.night;
+  if (minutes < 12 * 60) return _DayPeriod.morning;
+  if (minutes < 18 * 60) return _DayPeriod.afternoon;
+  return _DayPeriod.night;
+}
+
+int? _minutesOf(String? value) {
+  final parts = value?.split(':');
+  if (parts == null || parts.length < 2) return null;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null) return null;
+  return h * 60 + m;
+}
+
+/// Azul = visita técnica (orçamento), vermelho = ordem de serviço.
+const _kQuoteColor = Color(0xFF5B8FD4);
+const _kWorkOrderColor = Color(0xFFE23B2E);
+
+class _MarkerStack extends StatelessWidget {
+  const _MarkerStack({required this.appointments, required this.horizontal});
+
+  final List<Appointment> appointments;
+  final bool horizontal;
+
+  static const _maxMarkers = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = appointments.take(_maxMarkers).toList();
+    final extra = appointments.length - visible.length;
+    final markers = <Widget>[
+      for (final appointment in visible)
+        Container(
+          width: 20,
+          height: 12,
+          margin: horizontal
+              ? const EdgeInsets.symmetric(horizontal: 3)
+              : const EdgeInsets.symmetric(vertical: 3),
+          decoration: BoxDecoration(
+            color: appointment.kind == AppointmentKind.workOrder
+                ? _kWorkOrderColor
+                : _kQuoteColor,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+      if (extra > 0)
+        Padding(
+          padding: horizontal
+              ? const EdgeInsets.symmetric(horizontal: 3)
+              : const EdgeInsets.symmetric(vertical: 3),
+          child: Text(
+            '+$extra',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF40505D),
+                ),
+          ),
+        ),
+    ];
+
+    return horizontal
+        ? Row(mainAxisSize: MainAxisSize.min, children: markers)
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: markers,
+          );
   }
 }
 
