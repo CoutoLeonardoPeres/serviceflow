@@ -160,7 +160,7 @@ class _ServiceRequestFormScreenState
                 AppFormGrid(
                   children: [
                     AppFormFieldSpan(
-                      widthFactor: 4.5,
+                      widthFactor: 2.5,
                       child: customers.when(
                         loading: () => const LinearProgressIndicator(),
                         error: (_, __) =>
@@ -178,113 +178,11 @@ class _ServiceRequestFormScreenState
                           enabled: !isLoading,
                           onChanged: (value) =>
                               setState(() => _customerId = value),
-                          onCreateCustomer: _openCreateCustomerDialog,
-                          // Canal/Categoria/Prioridade na mesma linha do
-                          // botão "Cliente não cadastrado? Novo cliente".
-                          // Larguras relativas: Canal 20%, Categoria 40%
-                          // e Prioridade 50% maiores que a base.
-                          trailing: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                flex: 12,
-                                child: DropdownButtonFormField<
-                                    ServiceRequestChannel>(
-                                  initialValue: _channel,
-                                  isExpanded: true,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Canal',
-                                  ),
-                                  items: ServiceRequestChannel.values
-                                      .map(
-                                        (channel) => DropdownMenuItem(
-                                          value: channel,
-                                          child: Text(channel.label),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: isLoading
-                                      ? null
-                                      : (value) => setState(
-                                            () => _channel = value ??
-                                                ServiceRequestChannel
-                                                    .whatsapp,
-                                          ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                flex: 14,
-                                child: categories.when(
-                                  loading: () => const SizedBox.shrink(),
-                                  error: (_, __) => const SizedBox.shrink(),
-                                  data: (items) =>
-                                      DropdownButtonFormField<String>(
-                                    initialValue: _categoryId,
-                                    isExpanded: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Categoria',
-                                    ),
-                                    items: [
-                                      const DropdownMenuItem<String>(
-                                        value: null,
-                                        child: Text('Sem categoria'),
-                                      ),
-                                      ...items.map(
-                                        (category) => DropdownMenuItem(
-                                          value: category.id,
-                                          child: Text(category.name),
-                                        ),
-                                      ),
-                                    ],
-                                    onChanged: isLoading
-                                        ? null
-                                        : (value) => setState(
-                                              () => _categoryId = value,
-                                            ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                flex: 15,
-                                child: priorities.when(
-                                  loading: () => const SizedBox.shrink(),
-                                  error: (_, __) => const SizedBox.shrink(),
-                                  data: (items) =>
-                                      DropdownButtonFormField<String>(
-                                    initialValue: _priorityId,
-                                    isExpanded: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Prioridade',
-                                    ),
-                                    items: [
-                                      const DropdownMenuItem<String>(
-                                        value: null,
-                                        child: Text('Sem prioridade'),
-                                      ),
-                                      ...items.map(
-                                        (priority) => DropdownMenuItem(
-                                          value: priority.id,
-                                          child: Text(priority.name),
-                                        ),
-                                      ),
-                                    ],
-                                    onChanged: isLoading
-                                        ? null
-                                        : (value) => setState(
-                                              () => _priorityId = value,
-                                            ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                         ),
                       ),
                     ),
                     AppFormFieldSpan(
-                      widthFactor: 1.5,
+                      widthFactor: 3.5,
                       child: TextFormField(
                         controller: _titleController,
                         decoration: const InputDecoration(
@@ -297,6 +195,104 @@ class _ServiceRequestFormScreenState
                           if (text.length < 3) return 'Informe um título.';
                           return null;
                         },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Botão de novo cliente + Canal/Categoria/Prioridade em uma
+                // linha própria de largura total. Ficavam aninhados dentro do
+                // slot do campo Cliente, o que fazia os dropdowns encolherem
+                // sempre que o campo Cliente diminuía.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    TextButton.icon(
+                      onPressed: isLoading ? null : _openCreateCustomerDialog,
+                      icon: const Icon(Icons.person_add_alt_1_outlined),
+                      label: const Text('Cliente não cadastrado? Novo cliente'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 14,
+                      child: DropdownButtonFormField<ServiceRequestChannel>(
+                        initialValue: _channel,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Canal'),
+                        items: ServiceRequestChannel.values
+                            .map(
+                              (channel) => DropdownMenuItem(
+                                value: channel,
+                                child: Text(channel.label),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isLoading
+                            ? null
+                            : (value) => setState(
+                                  () => _channel =
+                                      value ?? ServiceRequestChannel.whatsapp,
+                                ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 17,
+                      child: categories.when(
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                        data: (items) => DropdownButtonFormField<String>(
+                          initialValue: _categoryId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Categoria',
+                          ),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text('Sem categoria'),
+                            ),
+                            ...items.map(
+                              (category) => DropdownMenuItem(
+                                value: category.id,
+                                child: Text(category.name),
+                              ),
+                            ),
+                          ],
+                          onChanged: isLoading
+                              ? null
+                              : (value) => setState(() => _categoryId = value),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 18,
+                      child: priorities.when(
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                        data: (items) => DropdownButtonFormField<String>(
+                          initialValue: _priorityId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Prioridade',
+                          ),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text('Sem prioridade'),
+                            ),
+                            ...items.map(
+                              (priority) => DropdownMenuItem(
+                                value: priority.id,
+                                child: Text(priority.name),
+                              ),
+                            ),
+                          ],
+                          onChanged: isLoading
+                              ? null
+                              : (value) => setState(() => _priorityId = value),
+                        ),
                       ),
                     ),
                   ],
@@ -395,16 +391,12 @@ class _CustomerAutocompleteField extends StatelessWidget {
     required this.selectedCustomerId,
     required this.enabled,
     required this.onChanged,
-    required this.onCreateCustomer,
-    this.trailing,
   });
 
   final List<Customer> customers;
   final String? selectedCustomerId;
   final bool enabled;
   final ValueChanged<String?> onChanged;
-  final Future<void> Function() onCreateCustomer;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -524,21 +516,6 @@ class _CustomerAutocompleteField extends StatelessWidget {
                   ),
                 );
               },
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                TextButton.icon(
-                  onPressed: enabled ? onCreateCustomer : null,
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                  label: const Text('Cliente não cadastrado? Novo cliente'),
-                ),
-                if (trailing != null) ...[
-                  const SizedBox(width: 12),
-                  Expanded(child: trailing!),
-                ],
-              ],
             ),
           ],
         );
