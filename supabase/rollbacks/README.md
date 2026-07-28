@@ -29,6 +29,9 @@ precisa **restaurar** a versão antiga da função — não apagá-la.
 | 0048 | 0044 (`receive_purchase_order`) | Rodar o rollback de 0044 antes do de 0048 quebra os FKs de `payables` para `suppliers` e `purchase_orders`; rodar 0048 fora de ordem deixa `receive_purchase_order` chamando uma função de payables já apagada |
 | 0049 | — | `get_dre_monthly` é só leitura (agrega `payment_records`/`payable_payments`); o rollback apaga a função e não depende de ordem em relação a 0048/0013 |
 | 0050 | 0042 (coluna `created_at`) | Só muda o `DEFAULT` da coluna — sem FK, sem dependência de ordem com outras migrations |
+| 0051 | 0004 (`_sf_set_appointment_meta`, `schedule_appointment`) | Rodar o rollback de 0051 **não** restaura a FK de `appointments.reference_id`, que ela removeu: com agendamento de OS existente a FK não volta. O rollback restaura as duas funções na versão de 0004 |
+| 0052 | 0051 (`appointment_events.event_type` CHECK) | Rodar fora de ordem deixa eventos `technician_added`/`technician_removed` violando o CHECK restaurado. O rollback de 0052 apaga esses eventos antes |
+| 0053 | 0051 (`schedule_appointment`, `cancel_appointment`), 0052 (`assign_technician`, `unassign_technician`) | **Aridade mudou nas quatro**: `schedule_appointment` 8→9 (`p_professional_id`), `assign_technician`/`unassign_technician` 2→3. O rollback derruba as versões de 0053 mas **não** recria as de 0051/0052 — reaplique-as à mão, senão a agenda fica sem RPC. Rodar o de 0052 antes do de 0053 deixa `assign_technician` órfão apontando para `professional_id`, coluna que 0053 remove |
 
 **Armadilha de aridade:** `CREATE OR REPLACE` com número de parâmetros diferente
 **não substitui** — cria uma sobrecarga. As duas versões coexistem e chamadas
@@ -37,7 +40,10 @@ com a aridade antiga passam a falhar com `function is not unique`, em runtime.
 `add_work_order_material` já mudou de assinatura três vezes: 5→6 em 0043
 (`p_product_id`), 6→7 em 0045 (`p_warehouse_id`) e 7→8 em 0047 (`p_lot_code`).
 `record_stock_entry`/`record_stock_exit`/`record_stock_adjustment` também
-mudaram em 0047 (ganharam `p_lot_code`). Cada migration e cada rollback
+mudaram em 0047 (ganharam `p_lot_code`). `schedule_appointment` mudou 8→9 em
+0053 (`p_professional_id`) e `assign_technician`/`unassign_technician` 2→3 —
+por isso 0053 derruba explicitamente as assinaturas antigas no fim do arquivo:
+duas versões vivas fazem o PostgREST devolver `PGRST203` em vez de executar. Cada migration e cada rollback
 correspondente faz `DROP FUNCTION` explícito da versão anterior antes de
 criar a nova, com a assinatura completa. **Qualquer migration que mude a
 assinatura de uma função precisa do mesmo cuidado** — e o rollback precisa

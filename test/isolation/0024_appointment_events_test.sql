@@ -15,6 +15,10 @@
 -- Como executar:
 --   psql $DATABASE_URL -f test/isolation/0024_appointment_events_test.sql
 -- Substitua os \set abaixo pelos UUIDs reais do seed antes de executar.
+-- ATENCAO (0053): schedule_appointment resolve o profissional a partir de
+-- p_technician_user_id quando p_professional_id vem nulo. Estes testes usam a
+-- forma antiga, entao exigem que exista `service_professionals` ativo com
+-- `linked_user_id` apontando para cada usuario tecnico usado aqui.
 -- =============================================================================
 
 \set ON_ERROR_STOP on
