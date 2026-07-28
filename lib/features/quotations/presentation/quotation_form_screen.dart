@@ -298,10 +298,22 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     loading: () => const LinearProgressIndicator(),
                     error: (_, __) => const Text('Clientes indisponíveis.'),
                     data: (items) => CustomerSearchField(
+                      // O Autocomplete só lê o texto inicial na primeira
+                      // construção: sem trocar a key, escolher um chamado
+                      // mudaria o cliente no estado e deixaria o campo vazio
+                      // na tela.
+                      key: ValueKey('customer-${_customer?.id ?? ''}'),
                       customers: items,
                       selected: _customer,
                       enabled: !isLoading,
-                      onChanged: (value) => setState(() => _customer = value),
+                      onChanged: (value) => setState(() {
+                        _customer = value;
+                        // Escolher outro cliente invalida o chamado que estava
+                        // selecionado — ele é de outra pessoa.
+                        if (value != null && _request?.customerId != value.id) {
+                          _request = null;
+                        }
+                      }),
                       validator: (value) =>
                           value == null ? 'Selecione um cliente.' : null,
                     ),
@@ -314,10 +326,26 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     error: (_, __) => const SizedBox.shrink(),
                     data: (items) {
                       _applyInitialRequest(items);
+                      // Com cliente escolhido, o campo de chamado já abre só
+                      // com os chamados dele.
+                      final customer = _customer;
+                      final visible = customer == null
+                          ? items
+                          : items
+                              .where((r) => r.customerId == customer.id)
+                              .toList();
                       return _RequestSearchField(
-                        requests: items,
+                        // Mesma razão da key do cliente: trocar o cliente
+                        // limpa o chamado, e o campo precisa refletir isso.
+                        key: ValueKey(
+                          'request-${_request?.id ?? ''}-${customer?.id ?? ''}',
+                        ),
+                        requests: visible,
                         selected: _request,
                         enabled: !isLoading,
+                        emptyHint: customer == null
+                            ? null
+                            : 'Nenhum chamado aberto para ${customer.name}.',
                         onChanged: (value) => setState(() {
                           _request = value;
                           // Trocar o chamado troca o cliente junto: orçamento
@@ -948,16 +976,22 @@ class _LinesSpreadsheet extends StatelessWidget {
 /// Busca de chamado por número, título ou cliente. Lista os não encerrados.
 class _RequestSearchField extends StatelessWidget {
   const _RequestSearchField({
+    super.key,
     required this.requests,
     required this.selected,
     required this.onChanged,
     this.enabled = true,
+    this.emptyHint,
   });
 
   final List<ServiceRequest> requests;
   final ServiceRequest? selected;
   final ValueChanged<ServiceRequest?> onChanged;
   final bool enabled;
+
+  /// Mensagem quando o cliente escolhido não tem chamado aberto — sem ela o
+  /// campo parece quebrado ao não sugerir nada.
+  final String? emptyHint;
 
   String _label(ServiceRequest request) =>
       '${request.displayNumber} · ${request.title}';
@@ -989,6 +1023,7 @@ class _RequestSearchField extends StatelessWidget {
           decoration: InputDecoration(
             labelText: 'Chamado (opcional)',
             hintText: 'Buscar por número, título ou cliente',
+            helperText: requests.isEmpty ? emptyHint : null,
             suffixIcon: controller.text.isEmpty
                 ? const Icon(Icons.search_outlined)
                 : IconButton(
