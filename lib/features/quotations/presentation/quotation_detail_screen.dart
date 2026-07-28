@@ -52,10 +52,18 @@ class QuotationDetailScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _generatePdf(BuildContext context, Quotation quote) async {
+  Future<void> _generatePdf(
+    BuildContext context,
+    WidgetRef ref,
+    Quotation quote,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final result = await QuotationPdfGenerator.generate(quote);
+      // As linhas não vêm no objeto Quotation — sem buscá-las, o PDF saía só
+      // com os totais.
+      final items =
+          await ref.read(quotationRepositoryProvider).listItems(quote.id);
+      final result = await QuotationPdfGenerator.generate(quote, items: items);
       await Printing.sharePdf(
         bytes: result.bytes,
         filename: result.fileName,
@@ -330,7 +338,7 @@ class QuotationDetailScreen extends ConsumerWidget {
                       runSpacing: 12,
                       children: [
                         FilledButton.icon(
-                          onPressed: () => _generatePdf(context, quote),
+                          onPressed: () => _generatePdf(context, ref, quote),
                           icon: const Icon(Icons.picture_as_pdf_outlined),
                           label: const Text('Gerar PDF'),
                         ),

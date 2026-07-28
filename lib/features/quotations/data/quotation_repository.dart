@@ -299,15 +299,30 @@ class QuotationRepository {
     }
   }
 
-  Future<Quotation> getPublicByToken(String token) async {
+  /// Orçamento e linhas de um link público, para visitante não autenticado.
+  ///
+  /// Tudo vem da RPC (SECURITY DEFINER, valida o token). Não dá para
+  /// enriquecer com consultas diretas aqui: elas rodariam como `anon`, que não
+  /// passa pelas policies — era o que fazia a página falhar por inteiro.
+  Future<({Quotation quotation, List<QuotationItem> items})> getPublicByToken(
+    String token,
+  ) async {
     try {
       final row = await _db.rpc(
         'get_public_quotation',
         params: {'p_token': token},
       );
-      final enriched = Map<String, dynamic>.from(row as Map);
-      await _attachRouteAddresses([enriched]);
-      return quotationFromRow(enriched);
+      final map = Map<String, dynamic>.from(row as Map);
+      final rawItems = map['quotation_items'];
+      final items = rawItems is List
+          ? rawItems
+              .map(
+                (item) =>
+                    _quotationItemFromRow(Map<String, dynamic>.from(item as Map)),
+              )
+              .toList()
+          : <QuotationItem>[];
+      return (quotation: quotationFromRow(map), items: items);
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {

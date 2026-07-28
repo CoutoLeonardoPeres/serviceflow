@@ -62,7 +62,8 @@ class _QuotationPublicScreenState extends ConsumerState<QuotationPublicScreen> {
               error: (_, __) => const ErrorView(
                 message: 'Link inválido, expirado ou indisponível.',
               ),
-              data: (quote) {
+              data: (result) {
+                final quote = result.quotation;
                 final sent = _sentDecision;
                 return NeomorphicPanel(
                   padding: const EdgeInsets.all(28),
@@ -88,6 +89,10 @@ class _QuotationPublicScreenState extends ConsumerState<QuotationPublicScreen> {
                                   color: Theme.of(context).colorScheme.primary,
                                 ),
                       ),
+                      if (result.items.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        _PublicItems(items: result.items, currency: currency),
+                      ],
                       if (quote.notes != null) ...[
                         const SizedBox(height: 18),
                         Text(quote.notes!),
@@ -155,7 +160,90 @@ class _QuotationPublicScreenState extends ConsumerState<QuotationPublicScreen> {
   }
 }
 
-final _publicQuotationProvider =
-    FutureProvider.autoDispose.family<Quotation, String>((ref, token) async {
+final _publicQuotationProvider = FutureProvider.autoDispose
+    .family<({Quotation quotation, List<QuotationItem> items}), String>(
+        (ref, token) async {
   return ref.read(quotationRepositoryProvider).getPublicByToken(token);
 });
+
+
+/// Itens da proposta agrupados por natureza, na mesma divisão do PDF.
+class _PublicItems extends StatelessWidget {
+  const _PublicItems({required this.items, required this.currency});
+
+  final List<QuotationItem> items;
+  final NumberFormat currency;
+
+  static const _groups = <(String, List<QuotationItemKind>)>[
+    (
+      'Serviços e horas técnicas',
+      [QuotationItemKind.service, QuotationItemKind.laborHour],
+    ),
+    (
+      'Materiais e equipamentos',
+      [QuotationItemKind.material, QuotationItemKind.equipment],
+    ),
+    ('Despesas', [QuotationItemKind.travel, QuotationItemKind.other]),
+    ('Impostos', [QuotationItemKind.tax]),
+    ('Descontos', [QuotationItemKind.discount]),
+  ];
+
+  String _quantity(num value) => value == value.roundToDouble()
+      ? value.round().toString()
+      : value.toString().replaceAll('.', ',');
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final blocks = <Widget>[];
+
+    for (final (title, kinds) in _groups) {
+      final group = items.where((item) => kinds.contains(item.kind)).toList();
+      if (group.isEmpty) continue;
+      final subtotal =
+          group.fold<int>(0, (sum, item) => sum + item.totalCents);
+
+      blocks.addAll([
+        const SizedBox(height: 14),
+        Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        ...group.map(
+          (item) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: Text(item.description)),
+                const SizedBox(width: 10),
+                Text('${_quantity(item.quantity)}x'),
+                const SizedBox(width: 14),
+                Text(
+                  currency.format(item.totalCents / 100),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'Subtotal: ${currency.format(subtotal / 100)}',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ),
+      ]);
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: blocks);
+  }
+}

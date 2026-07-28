@@ -18,7 +18,12 @@ class QuotationPdfResult {
 class QuotationPdfGenerator {
   QuotationPdfGenerator._();
 
-  static Future<QuotationPdfResult> generate(Quotation quote) async {
+  /// [items] vem separado porque `Quotation` não carrega as linhas — sem
+  /// passá-las, o PDF saía só com os totais.
+  static Future<QuotationPdfResult> generate(
+    Quotation quote, {
+    List<QuotationItem> items = const [],
+  }) async {
     final regularFont = pw.Font.ttf(
       await rootBundle.load('assets/fonts/Roboto-Regular.ttf'),
     );
@@ -140,6 +145,23 @@ class QuotationPdfGenerator {
               ],
             ),
           ),
+          pw.SizedBox(height: 22),
+          pw.Text(
+            'Itens do orçamento',
+            style: pw.TextStyle(
+              color: ink,
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          if (items.isEmpty)
+            pw.Text(
+              'Nenhum item detalhado neste orçamento.',
+              style: pw.TextStyle(color: muted, fontSize: 11),
+            )
+          else
+            ..._itemGroups(items, currency, ink, muted, accent),
           pw.SizedBox(height: 22),
           pw.Text(
             'Resumo financeiro',
@@ -301,6 +323,135 @@ class _InfoBlock extends pw.StatelessWidget {
       ),
     );
   }
+}
+
+/// Agrupa as linhas pela natureza do custo — mesma divisão dos cards do
+/// formulário: serviços, materiais, despesas e impostos.
+const _pdfGroups = <(String, List<QuotationItemKind>)>[
+  (
+    'Serviços e horas técnicas',
+    [QuotationItemKind.service, QuotationItemKind.laborHour],
+  ),
+  (
+    'Materiais e equipamentos',
+    [QuotationItemKind.material, QuotationItemKind.equipment],
+  ),
+  ('Despesas', [QuotationItemKind.travel, QuotationItemKind.other]),
+  ('Impostos', [QuotationItemKind.tax]),
+  ('Descontos', [QuotationItemKind.discount]),
+];
+
+List<pw.Widget> _itemGroups(
+  List<QuotationItem> items,
+  NumberFormat currency,
+  PdfColor ink,
+  PdfColor muted,
+  PdfColor accent,
+) {
+  final widgets = <pw.Widget>[];
+
+  for (final (title, kinds) in _pdfGroups) {
+    final group = items.where((item) => kinds.contains(item.kind)).toList();
+    if (group.isEmpty) continue;
+
+    final subtotal =
+        group.fold<int>(0, (sum, item) => sum + item.totalCents);
+
+    widgets.addAll([
+      pw.SizedBox(height: 10),
+      pw.Text(
+        title,
+        style: pw.TextStyle(
+          color: accent,
+          fontWeight: pw.FontWeight.bold,
+          fontSize: 12,
+        ),
+      ),
+      pw.SizedBox(height: 6),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColor.fromHex('#D7DFEA')),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(5),
+          1: pw.FlexColumnWidth(1),
+          2: pw.FlexColumnWidth(1.6),
+          3: pw.FlexColumnWidth(1.8),
+        },
+        children: [
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: PdfColor.fromHex('#EEF3F8')),
+            children: [
+              _cell('Descrição', ink, bold: true),
+              _cell('Qtd', ink, bold: true, align: pw.TextAlign.right),
+              _cell('Unitário', ink, bold: true, align: pw.TextAlign.right),
+              _cell('Total', ink, bold: true, align: pw.TextAlign.right),
+            ],
+          ),
+          ...group.map(
+            (item) => pw.TableRow(
+              children: [
+                _cell(item.description, ink),
+                _cell(
+                  _formatQuantity(item.quantity),
+                  ink,
+                  align: pw.TextAlign.right,
+                ),
+                _cell(
+                  currency.format(item.unitPriceCents / 100),
+                  ink,
+                  align: pw.TextAlign.right,
+                ),
+                _cell(
+                  currency.format(item.totalCents / 100),
+                  ink,
+                  align: pw.TextAlign.right,
+                ),
+              ],
+            ),
+          ),
+          pw.TableRow(
+            children: [
+              _cell('Subtotal', muted, align: pw.TextAlign.right),
+              _cell('', muted),
+              _cell('', muted),
+              _cell(
+                currency.format(subtotal / 100),
+                ink,
+                bold: true,
+                align: pw.TextAlign.right,
+              ),
+            ],
+          ),
+        ],
+      ),
+    ]);
+  }
+
+  return widgets;
+}
+
+pw.Widget _cell(
+  String text,
+  PdfColor color, {
+  bool bold = false,
+  pw.TextAlign align = pw.TextAlign.left,
+}) =>
+    pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: pw.Text(
+        text,
+        textAlign: align,
+        style: pw.TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+      ),
+    );
+
+/// 2 vira "2"; 2.5 vira "2,5" — quantidade fracionada existe em hora técnica.
+String _formatQuantity(num quantity) {
+  if (quantity == quantity.roundToDouble()) return quantity.round().toString();
+  return quantity.toString().replaceAll('.', ',');
 }
 
 class _MoneyRow extends pw.TableRow {
