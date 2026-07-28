@@ -1359,28 +1359,6 @@ class _SatisfactionFormState extends ConsumerState<_SatisfactionForm> {
     }
   }
 
-  /// Traz custo e preço do melhor fornecedor (ou do saldo próprio) para os
-  /// campos, sem travá-los. O mesmo comparador do orçamento — duplicar o
-  /// ranking garantiria que uma das duas telas ficaria desatualizada.
-  Future<void> _pickMaterialSource() async {
-    final choice = await showMaterialSourcePicker(
-      context: context,
-      initialProductId: _productId,
-    );
-    if (choice == null || !mounted) return;
-
-    setState(() {
-      _descriptionController.text = choice.productName;
-      _unitCostController.text =
-          (choice.unitCostCents / 100).toStringAsFixed(2);
-      _unitPriceController.text =
-          (choice.unitPriceCents / 100).toStringAsFixed(2);
-      // Saldo próprio implica baixa de estoque; compra de fornecedor não
-      // mexe no saldo e fica como lançamento avulso.
-      if (choice.fromStock) _productId = choice.productId;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -1588,6 +1566,28 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
 
   /// Depósito da baixa (F3-P4). Null usa o padrão do tenant.
   String? _warehouseId;
+
+  /// Traz custo e preço do melhor fornecedor (ou do saldo próprio) para os
+  /// campos, sem travá-los. O mesmo comparador do orçamento — duplicar o
+  /// ranking garantiria que uma das duas telas ficaria desatualizada.
+  Future<void> _pickMaterialSource() async {
+    final choice = await showMaterialSourcePicker(
+      context: context,
+      initialProductId: _productId,
+    );
+    if (choice == null || !mounted) return;
+
+    setState(() {
+      _descriptionController.text = choice.productName;
+      _unitCostController.text =
+          (choice.unitCostCents / 100).toStringAsFixed(2);
+      _unitPriceController.text =
+          (choice.unitPriceCents / 100).toStringAsFixed(2);
+      // Saldo próprio implica baixa de estoque; compra de fornecedor não
+      // mexe no saldo e fica como lançamento avulso.
+      if (choice.fromStock) _productId = choice.productId;
+    });
+  }
 
   /// Rastreio do produto selecionado (ADR-024, F3-P5). None = sem produto ou
   /// produto sem rastreio — campo de lote/série some.

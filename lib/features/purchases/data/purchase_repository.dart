@@ -407,12 +407,6 @@ class PurchaseRepository {
     }
   }
 
-  String? _nullIfEmpty(String? value) {
-    if (value == null) return null;
-    final t = value.trim();
-    return t.isEmpty ? null : t;
-  }
-
   AppError _mapError(PostgrestException e) {
     if (e.code == '42501' || e.code == 'insufficient_privilege') {
       return const PermissionError(
