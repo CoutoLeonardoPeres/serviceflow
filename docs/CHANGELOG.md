@@ -1,5 +1,36 @@
 # Changelog
 
+## [CEP no fornecedor e correção de acentos] — 2026-07-28
+
+### Adicionado
+
+- **Busca de CEP no cadastro de fornecedor.** Preenche logradouro, bairro,
+  cidade e UF; dispara sozinha ao completar os 8 dígitos, sem precisar clicar.
+  Só sobrescreve o que o ViaCEP devolveu preenchido — CEP geral de cidade
+  pequena não traz rua nem bairro, e apagar o que a pessoa digitou seria pior
+  do que não completar.
+- A consulta saiu de dentro de `customer_form_screen` para
+  `core/location/cep_lookup.dart`. Estava embutida numa tela; duplicá-la faria
+  as duas divergirem no tratamento de erro. Com teste cobrindo o caso que mais
+  morde: o ViaCEP responde **200** com `{"erro": true}` para CEP inexistente, e
+  olhar só o status daria o endereço como encontrado.
+
+### Corrigido
+
+- **Formulário de fornecedor estourava a altura do diálogo** (~800px).
+  `showAppFormDialog` limita em 760 e não rola — quem rola é cada formulário.
+  O contrato passou a estar escrito na doc da função; o scroll não foi para o
+  diálogo porque quatro filhos usam `Expanded`/`ListView` e quebrariam sob
+  altura ilimitada.
+- **Policies das migrations 0059 e 0051 ficaram reexecutáveis.** `CREATE POLICY`
+  não aceita `IF NOT EXISTS` no Postgres; sem `DROP POLICY IF EXISTS` antes, a
+  reaplicação morria no meio do arquivo.
+- Script `dist/corrige_acentos_categorias.sql` para os nomes de categoria que
+  chegaram ao banco como mojibake (UTF-8 lido como MacRoman no caminho arquivo
+  → área de transferência → SQL Editor). O script é 100% ASCII de propósito:
+  os nomes viajam em hexadecimal e o Postgres reconstrói o UTF-8, então ele
+  sobrevive ao mesmo editor que causou o problema.
+
 ## [F7-P3 — Melhor preço dentro do orçamento e da OS] — 2026-07-28
 
 Última fase do módulo de materiais. Sem migration: usa a `best_price_for_product`

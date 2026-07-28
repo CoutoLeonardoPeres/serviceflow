@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_error.dart';
+import '../../../core/location/cep_lookup.dart';
 import '../../../core/widgets/app_form_dialog.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/neomorphic.dart';
@@ -263,6 +264,44 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
     super.dispose();
   }
 
+  bool _cepLoading = false;
+  String? _lastCep;
+
+  /// Preenche o endereço a partir do CEP.
+  ///
+  /// Só sobrescreve campo que o ViaCEP devolveu preenchido: CEP geral de
+  /// cidade pequena não traz rua nem bairro, e apagar o que a pessoa já
+  /// digitou seria pior do que não completar.
+  Future<void> _lookupCep() async {
+    final digits = _c('zipCode').text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length != 8 || digits == _lastCep || _cepLoading) return;
+
+    setState(() {
+      _cepLoading = true;
+      _lastCep = digits;
+    });
+
+    try {
+      final address = await lookupCep(digits);
+      if (!mounted) return;
+      setState(() {
+        if (address.street.isNotEmpty) _c('street').text = address.street;
+        if (address.district.isNotEmpty) {
+          _c('district').text = address.district;
+        }
+        if (address.city.isNotEmpty) _c('city').text = address.city;
+        if (address.state.isNotEmpty) _c('state').text = address.state;
+      });
+    } on CepLookupException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } finally {
+      if (mounted) setState(() => _cepLoading = false);
+    }
+  }
+
   int _parseMoneyCents(String raw) {
     final digits = raw.replaceAll(RegExp(r'[^0-9,.]'), '').replaceAll(',', '.');
     final value = double.tryParse(digits) ?? 0;
@@ -417,8 +456,31 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
               children: [
                 TextFormField(
                   controller: _c('zipCode'),
-                  decoration: const InputDecoration(labelText: 'CEP'),
-                  maxLength: 12,
+                  keyboardType: TextInputType.number,
+                  maxLength: 9,
+                  decoration: InputDecoration(
+                    labelText: 'CEP',
+                    helperText: 'Preenche o endereço',
+                    suffixIcon: _cepLoading
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              height: 18,
+                              width: 18,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            tooltip: 'Buscar endereço',
+                            icon: const Icon(Icons.search),
+                            onPressed: _lookupCep,
+                          ),
+                  ),
+                  // Busca sozinho ao completar os 8 dígitos; quem colar o CEP
+                  // não precisa clicar em nada.
+                  onChanged: (_) => _lookupCep(),
+                  onEditingComplete: _lookupCep,
                 ),
                 AppFormFieldSpan(
                   columns: 2,

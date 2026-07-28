@@ -1,12 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 
 import '../../../core/location/address_geocoder.dart';
+import '../../../core/location/cep_lookup.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/address_location_box.dart';
 import '../../../core/widgets/app_form_layout.dart';
@@ -225,30 +223,20 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('https://viacep.com.br/ws/$cep/json/'))
-          .timeout(const Duration(seconds: 8));
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      if (data['erro'] == true) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('CEP não encontrado. Preencha manualmente.')),
-        );
-        return;
-      }
-      _streetCtrl.text = data['logradouro'] as String? ?? _streetCtrl.text;
-      _districtCtrl.text = data['bairro'] as String? ?? _districtCtrl.text;
-      _cityCtrl.text = data['localidade'] as String? ?? _cityCtrl.text;
-      final uf = data['uf'] as String?;
-      if (uf != null && kBrazilianStates.contains(uf)) {
-        setState(() => _stateUf = uf);
-      }
-    } catch (_) {
+      // A consulta vive em core/location: o cadastro de fornecedor usa a
+      // mesma, e duas cópias divergiriam no tratamento de erro.
+      final address = await lookupCep(cep);
+      if (!mounted) return;
+      setState(() {
+        if (address.street.isNotEmpty) _streetCtrl.text = address.street;
+        if (address.district.isNotEmpty) _districtCtrl.text = address.district;
+        if (address.city.isNotEmpty) _cityCtrl.text = address.city;
+        if (kBrazilianStates.contains(address.state)) _stateUf = address.state;
+      });
+    } on CepLookupException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Não foi possível consultar o CEP agora.')),
+        SnackBar(content: Text(e.message)),
       );
     } finally {
       if (mounted) setState(() => _isCepLoading = false);
