@@ -177,17 +177,20 @@ class _AppointmentListScreenState extends ConsumerState<AppointmentListScreen> {
 
   Future<void> _openScheduleDialog(
     DateTime day,
-    List<Appointment> appointments,
-  ) async {
+    List<Appointment> appointments, {
+    _QueueDrag? pending,
+  }) async {
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (_) => _DayScheduleDialog(
         initialDate: day,
         appointments: appointments,
+        pending: pending,
       ),
     );
     if (mounted) {
+      ref.invalidate(_scheduledReferenceKeysProvider);
       ref.read(appointmentListProvider.notifier).refresh();
     }
   }
@@ -210,44 +213,81 @@ class _AppointmentListScreenState extends ConsumerState<AppointmentListScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => ref.read(appointmentListProvider.notifier).refresh(),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          children: [
-            _CalendarHeader(
-              month: _visibleMonth,
-              onPrevious: () => _moveMonth(-1),
-              onNext: () => _moveMonth(1),
-            ),
-            const SizedBox(height: 14),
-            const _LegendRow(),
-            const SizedBox(height: 14),
-            if (state.error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: ErrorView(
-                  message: state.error!.userMessage,
-                  onRetry: () =>
-                      ref.read(appointmentListProvider.notifier).refresh(),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: NeomorphicPanel(
+          borderRadius: 34,
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Mesma fila da agenda do dia: aqui o card é solto sobre um dia
+              // e o horário é escolhido no passo seguinte.
+              SizedBox(
+                width: 300,
+                child: _ProfessionSidebar(
+                  selectedProfessionalId: null,
+                  technicians: ref.watch(techniciansProvider).maybeWhen(
+                        data: (items) => items,
+                        orElse: () => const <Technician>[],
+                      ),
+                  onSelectGeneral: () {},
+                  onSelectTechnician: (_) {},
                 ),
               ),
-            if (state.isLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            _CalendarGrid(
-              month: _visibleMonth,
-              appointmentsByDay: appointmentsByDay,
-              onDayTap: (day) => _openScheduleDialog(
-                  day, appointmentsByDay[day.day] ?? const []),
-              weeklySchedule: ref.watch(companySettingsProvider).maybeWhen(
-                    data: (settings) => settings.weeklySchedule,
-                    orElse: defaultWeeklySchedule,
+              const SizedBox(width: 18),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () =>
+                      ref.read(appointmentListProvider.notifier).refresh(),
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    children: [
+                      _CalendarHeader(
+                        month: _visibleMonth,
+                        onPrevious: () => _moveMonth(-1),
+                        onNext: () => _moveMonth(1),
+                      ),
+                      const SizedBox(height: 14),
+                      const _LegendRow(),
+                      const SizedBox(height: 14),
+                      if (state.error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: ErrorView(
+                            message: state.error!.userMessage,
+                            onRetry: () => ref
+                                .read(appointmentListProvider.notifier)
+                                .refresh(),
+                          ),
+                        ),
+                      if (state.isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      _CalendarGrid(
+                        month: _visibleMonth,
+                        appointmentsByDay: appointmentsByDay,
+                        onDayTap: (day) => _openScheduleDialog(
+                            day, appointmentsByDay[day.day] ?? const []),
+                        onItemDropped: (day, drag) => _openScheduleDialog(
+                          day,
+                          appointmentsByDay[day.day] ?? const [],
+                          pending: drag,
+                        ),
+                        weeklySchedule:
+                            ref.watch(companySettingsProvider).maybeWhen(
+                                  data: (settings) => settings.weeklySchedule,
+                                  orElse: defaultWeeklySchedule,
+                                ),
+                      ),
+                    ],
                   ),
-            ),
-          ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -509,12 +549,14 @@ class _CalendarGrid extends StatelessWidget {
     required this.appointmentsByDay,
     required this.onDayTap,
     required this.weeklySchedule,
+    required this.onItemDropped,
   });
 
   final DateTime month;
   final Map<int, List<Appointment>> appointmentsByDay;
   final ValueChanged<DateTime> onDayTap;
   final Map<String, DaySchedule> weeklySchedule;
+  final void Function(DateTime day, _QueueDrag drag) onItemDropped;
 
   @override
   Widget build(BuildContext context) {
@@ -554,14 +596,20 @@ class _CalendarGrid extends StatelessWidget {
                 if (day == null) return const SizedBox.shrink();
                 final items = appointmentsByDay[day.day] ?? const [];
                 final isClosed = day.weekday == DateTime.sunday;
-                return _CalendarDayCard(
-                  day: day,
-                  appointments: items,
-                  isClosed: isClosed,
-                  onTap: isClosed ? null : () => onDayTap(day),
-                  daySchedule:
-                      weeklySchedule[kWeekdayOrder[day.weekday - 1]] ??
-                          defaultDaySchedule(),
+                return DragTarget<_QueueDrag>(
+                  onWillAcceptWithDetails: (_) => !isClosed,
+                  onAcceptWithDetails: (details) =>
+                      onItemDropped(day, details.data),
+                  builder: (context, candidate, __) => _CalendarDayCard(
+                    day: day,
+                    appointments: items,
+                    isClosed: isClosed,
+                    highlighted: candidate.isNotEmpty,
+                    onTap: isClosed ? null : () => onDayTap(day),
+                    daySchedule:
+                        weeklySchedule[kWeekdayOrder[day.weekday - 1]] ??
+                            defaultDaySchedule(),
+                  ),
                 );
               },
             ),
@@ -599,6 +647,7 @@ class _CalendarDayCard extends StatelessWidget {
     required this.isClosed,
     required this.onTap,
     required this.daySchedule,
+    this.highlighted = false,
   });
 
   final DateTime day;
@@ -606,6 +655,7 @@ class _CalendarDayCard extends StatelessWidget {
   final bool isClosed;
   final VoidCallback? onTap;
   final DaySchedule daySchedule;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
@@ -627,10 +677,14 @@ class _CalendarDayCard extends StatelessWidget {
             color: baseColor,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: _isToday(day)
+              color: highlighted || _isToday(day)
                   ? const Color(0xFFB2537F)
                   : Colors.white.withValues(alpha: 0.2),
-              width: _isToday(day) ? 1.4 : 1,
+              width: highlighted
+                  ? 2.4
+                  : _isToday(day)
+                      ? 1.4
+                      : 1,
             ),
             boxShadow: [
               BoxShadow(
@@ -820,10 +874,16 @@ class _DayScheduleDialog extends ConsumerStatefulWidget {
   const _DayScheduleDialog({
     required this.initialDate,
     required this.appointments,
+    this.pending,
   });
 
   final DateTime initialDate;
   final List<Appointment> appointments;
+
+  /// Quando vem preenchido, o diálogo abre em modo "escolha o horário":
+  /// clicar num horário livre agenda este item direto, sem passar pelo menu
+  /// de ações. É o que acontece ao soltar um card da fila sobre um dia.
+  final _QueueDrag? pending;
 
   @override
   ConsumerState<_DayScheduleDialog> createState() => _DayScheduleDialogState();
@@ -834,6 +894,14 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
   String? _selectedProfessionalId;
   final _createdHere = <Appointment>[];
   final _cancelledHere = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    // Vindo do arrasto sobre um dia, já abre na agenda do profissional dono
+    // da fila — senão os horários mostrados seriam de outra pessoa.
+    _selectedProfessionalId = widget.pending?.technician.professionalId;
+  }
 
   List<Appointment> get _allAppointments => [
         ...widget.appointments,
@@ -922,6 +990,21 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                       ],
                     ),
                   ),
+                  if (widget.pending != null)
+                    Container(
+                      width: double.infinity,
+                      color: const Color(0xFFECDDE6),
+                      padding: const EdgeInsets.fromLTRB(24, 10, 24, 10),
+                      child: Text(
+                        'Escolha o horário para '
+                        '${widget.pending!.item.customerName} · '
+                        '${widget.pending!.item.label} '
+                        '(${widget.pending!.technician.name})',
+                        style: textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   const Divider(height: 1),
                   Expanded(
                     child: Padding(
@@ -1106,6 +1189,21 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                                   allTechnicians,
                                 ),
                                 onTap: () async {
+                                // Modo "escolha o horário": o item já veio
+                                // do arrasto sobre o dia, então o clique
+                                // agenda direto em vez de abrir o menu.
+                                final pending = widget.pending;
+                                if (pending != null) {
+                                  await _scheduleDroppedItem(
+                                    slot: slot,
+                                    item: pending.item,
+                                    technician: pending.technician,
+                                  );
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).pop();
+                                  return;
+                                }
+
                                 final action = await showDialog<_SlotAction>(
                                   context: context,
                                   barrierDismissible: true,
