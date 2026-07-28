@@ -36,9 +36,10 @@ class AppointmentFormNotifier extends Notifier<AppointmentFormState> {
     required AppointmentKind kind,
     required String referenceId,
     required String customerId,
-    required String technicianUserId,
+    required String professionalId,
     required DateTime scheduledStart,
     required DateTime scheduledEnd,
+    String? technicianUserId,
     String? addressId,
     String? notes,
   }) async {
@@ -62,6 +63,7 @@ class AppointmentFormNotifier extends Notifier<AppointmentFormState> {
 
       final created = await ref.read(appointmentRepositoryProvider).schedule(
             appointment: appointment,
+            professionalId: professionalId,
             technicianUserId: technicianUserId,
           );
       ref.read(appointmentListProvider.notifier).addOrReplace(created);
@@ -82,9 +84,10 @@ class AppointmentFormNotifier extends Notifier<AppointmentFormState> {
   Future<void> scheduleVisit({
     required String serviceRequestId,
     required String customerId,
-    required String technicianUserId,
+    required String professionalId,
     required DateTime scheduledStart,
     required DateTime scheduledEnd,
+    String? technicianUserId,
     String? addressId,
     String? notes,
   }) =>
@@ -92,6 +95,7 @@ class AppointmentFormNotifier extends Notifier<AppointmentFormState> {
         kind: AppointmentKind.visit,
         referenceId: serviceRequestId,
         customerId: customerId,
+        professionalId: professionalId,
         technicianUserId: technicianUserId,
         scheduledStart: scheduledStart,
         scheduledEnd: scheduledEnd,

@@ -16,14 +16,17 @@ class _FakeAppointmentRepository extends AppointmentRepository {
   final Appointment? created;
   final Object? error;
   Appointment? lastInput;
+  String? lastProfessionalId;
   String? lastTechnicianId;
 
   @override
   Future<Appointment> schedule({
     required Appointment appointment,
-    required String technicianUserId,
+    required String professionalId,
+    String? technicianUserId,
   }) async {
     lastInput = appointment;
+    lastProfessionalId = professionalId;
     lastTechnicianId = technicianUserId;
     if (error != null) throw error!;
     return created!;
@@ -75,6 +78,7 @@ void main() {
       await container.read(appointmentFormProvider.notifier).scheduleVisit(
             serviceRequestId: 'sr-001',
             customerId: 'customer-001',
+            professionalId: 'prof-001',
             technicianUserId: 'tech-001',
             scheduledStart: start,
             scheduledEnd: start.add(const Duration(hours: 2)),
@@ -86,7 +90,28 @@ void main() {
       expect(repo.lastInput?.kind, AppointmentKind.visit);
       expect(repo.lastInput?.referenceId, 'sr-001');
       expect(repo.lastInput?.notes, 'Cliente disponivel a tarde.');
+      expect(repo.lastProfessionalId, 'prof-001');
       expect(repo.lastTechnicianId, 'tech-001');
+    });
+
+    test('parceiro sem usuario do sistema tambem e agendavel', () async {
+      final repo = _FakeAppointmentRepository(created: appointmentFixture());
+      final container = makeContainer(repo);
+      addTearDown(container.dispose);
+      final start = DateTime.utc(2026, 7, 21, 13);
+
+      await container.read(appointmentFormProvider.notifier).scheduleVisit(
+            serviceRequestId: 'sr-001',
+            customerId: 'customer-001',
+            professionalId: 'prof-parceiro',
+            scheduledStart: start,
+            scheduledEnd: start.add(const Duration(hours: 2)),
+          );
+
+      expect(container.read(appointmentFormProvider),
+          isA<AppointmentFormSuccess>());
+      expect(repo.lastProfessionalId, 'prof-parceiro');
+      expect(repo.lastTechnicianId, isNull);
     });
 
     test('conflito de agenda vira erro de regra de negocio', () async {
@@ -102,6 +127,7 @@ void main() {
       await container.read(appointmentFormProvider.notifier).scheduleVisit(
             serviceRequestId: 'sr-001',
             customerId: 'customer-001',
+            professionalId: 'prof-001',
             technicianUserId: 'tech-001',
             scheduledStart: start,
             scheduledEnd: start.add(const Duration(hours: 2)),

@@ -109,7 +109,13 @@ class Appointment {
 
   Duration get duration => scheduledEnd.difference(scheduledStart);
 
-  Map<String, dynamic> toScheduleParams(String technicianUserId) => {
+  /// [professionalId] é o que manda: parceiro externo sem login do sistema
+  /// não tem [technicianUserId], mas continua agendável.
+  Map<String, dynamic> toScheduleParams({
+    required String professionalId,
+    String? technicianUserId,
+  }) =>
+      {
         'p_kind': kind.value,
         'p_reference_id': referenceId,
         'p_customer_id': customerId,
@@ -117,14 +123,23 @@ class Appointment {
         'p_scheduled_start': scheduledStart.toUtc().toIso8601String(),
         'p_scheduled_end': scheduledEnd.toUtc().toIso8601String(),
         'p_technician_user_id': technicianUserId,
+        'p_professional_id': professionalId,
         'p_notes': notes,
       };
 }
 
 class AppointmentTechnician {
-  const AppointmentTechnician({required this.userId, this.name});
+  const AppointmentTechnician({
+    required this.professionalId,
+    this.userId,
+    this.name,
+  });
 
-  final String userId;
+  /// Sempre presente: é por ele que a agenda identifica o profissional.
+  final String professionalId;
+
+  /// Só existe para quem tem login no sistema — parceiro externo não tem.
+  final String? userId;
   final String? name;
 
   String get label => name ?? 'Profissional';
@@ -140,9 +155,10 @@ Appointment appointmentFromRow(Map<String, dynamic> row) {
       for (final entry in assignments)
         if (entry is Map &&
             entry['revoked_at'] == null &&
-            entry['technician_user_id'] is String)
+            entry['professional_id'] is String)
           AppointmentTechnician(
-            userId: entry['technician_user_id'] as String,
+            professionalId: entry['professional_id'] as String,
+            userId: entry['technician_user_id'] as String?,
             name: entry['profiles'] is Map
                 ? (entry['profiles'] as Map)['full_name'] as String?
                 : null,

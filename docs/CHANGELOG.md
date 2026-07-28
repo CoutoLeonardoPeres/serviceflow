@@ -1,5 +1,45 @@
 # Changelog
 
+## [F5-P4 — Agendar profissional sem usuário do sistema] — 2026-07-27
+
+Arrastar um chamado para o horário respondia "Victor não tem usuário
+vinculado — agende pelo formulário", e o formulário respondia a mesma
+coisa: parceiro externo simplesmente não era agendável, apesar de a tela de
+profissionais permitir cadastrá-lo (ADR-028).
+
+### Corrigido
+
+- **Parceiro sem login agora é agendável.**
+  `appointment_assignments` ganhou `professional_id` e `technician_user_id`
+  virou opcional (`0053_schedule_partner_professionals.sql`, com backfill
+  dos assignments existentes). A agenda passa a identificar **o
+  profissional**; o usuário do sistema é só um detalhe de quem tem acesso ao
+  app de campo.
+- Conflito de horário é avaliado por profissional (`_sf_professional_busy`),
+  não por usuário — antes, dois cadastros de profissional apontando para o
+  mesmo usuário se bloqueavam entre si, e parceiro nenhum era verificado.
+- `schedule_appointment`, `assign_technician` e `unassign_technician`
+  passam a receber `p_professional_id`. As assinaturas anteriores são
+  derrubadas na mesma migration: `CREATE OR REPLACE` com parâmetro novo cria
+  um overload em vez de substituir, e dois no catálogo deixariam a chamada
+  ambígua (PGRST203).
+- O seletor de profissional do formulário de agendamento usava
+  `technician.userId` como valor do dropdown — com dois parceiros sem login
+  isso produzia dois itens de valor `null`, o que o Flutter rejeita em
+  tempo de execução.
+
+### Limitação conhecida
+
+- Parceiro sem login não cancela o próprio atendimento: a checagem de "sou o
+  técnico atribuído" é por `auth.uid()`. Sem app, o cancelamento dele passa
+  pelo operador.
+
+### Testes
+
+- `test/isolation/0026_partner_professional_scheduling_test.sql` — 7 casos.
+- `appointment_form_notifier_test.dart` ganhou o caso do parceiro sem
+  usuário.
+
 ## [F5-P2 — Mais de um profissional no mesmo atendimento] — 2026-07-27
 
 Serviço que exige dupla (troca de compressor, quadro trifásico) já cabia no

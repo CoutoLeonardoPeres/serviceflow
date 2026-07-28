@@ -10,6 +10,7 @@ import '../../service_requests/data/service_request_repository.dart';
 import '../../service_requests/domain/service_request.dart';
 import '../application/appointment_form_notifier.dart';
 import '../application/appointment_list_notifier.dart';
+import '../domain/technician.dart';
 
 final _schedulableRequestsProvider =
     FutureProvider.autoDispose<List<ServiceRequest>>((ref) async {
@@ -36,7 +37,7 @@ class _AppointmentFormScreenState extends ConsumerState<AppointmentFormScreen> {
   final _notesController = TextEditingController();
 
   ServiceRequest? _selectedRequest;
-  String? _technicianUserId;
+  String? _professionalId;
   late DateTime _start;
   late DateTime _end;
 
@@ -98,13 +99,29 @@ class _AppointmentFormScreenState extends ConsumerState<AppointmentFormScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final request = _selectedRequest;
-    final technicianUserId = _technicianUserId;
-    if (request == null || technicianUserId == null) return;
+    final professionalId = _professionalId;
+    if (request == null || professionalId == null) return;
+
+    // O usuário só existe para profissional com login; parceiro externo é
+    // identificado pelo cadastro de profissional.
+    final technicianUserId = ref
+        .read(techniciansProvider)
+        .maybeWhen(
+          data: (items) => items
+              .cast<Technician?>()
+              .firstWhere(
+                (t) => t?.professionalId == professionalId,
+                orElse: () => null,
+              )
+              ?.userId,
+          orElse: () => null,
+        );
 
     await ref.read(appointmentFormProvider.notifier).scheduleVisit(
           serviceRequestId: request.id,
           customerId: request.customerId,
           addressId: request.addressId,
+          professionalId: professionalId,
           technicianUserId: technicianUserId,
           scheduledStart: _start,
           scheduledEnd: _end,
@@ -182,22 +199,29 @@ class _AppointmentFormScreenState extends ConsumerState<AppointmentFormScreen> {
                       loading: () => const LinearProgressIndicator(),
                       error: (_, __) => const Text('Técnicos indisponíveis.'),
                       data: (items) => DropdownButtonFormField<String>(
-                        initialValue: _technicianUserId,
-                        decoration: const InputDecoration(labelText: 'Técnico'),
+                        initialValue: _professionalId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Profissional',
+                        ),
                         items: items
                             .map(
                               (technician) => DropdownMenuItem(
-                                value: technician.userId,
-                                child: Text(technician.name),
+                                value: technician.professionalId,
+                                child: Text(
+                                  technician.name,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             )
                             .toList(),
                         onChanged: isLoading
                             ? null
                             : (value) =>
-                                setState(() => _technicianUserId = value),
-                        validator: (value) =>
-                            value == null ? 'Selecione um técnico.' : null,
+                                setState(() => _professionalId = value),
+                        validator: (value) => value == null
+                            ? 'Selecione um profissional.'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 16),

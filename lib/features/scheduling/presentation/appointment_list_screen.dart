@@ -1262,17 +1262,12 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
     required _QueueItem item,
     required Technician technician,
   }) async {
-    final technicianUserId = technician.userId;
-    if (technicianUserId == null) {
-      _showDropMessage(
-        '${technician.name} não tem usuário vinculado — agende pelo formulário.',
-      );
-      return;
-    }
-
     try {
+      // Parceiro externo não tem login do sistema; o que identifica quem
+      // atende é o profissional, não o usuário.
       final created = await ref.read(appointmentRepositoryProvider).schedule(
-            technicianUserId: technicianUserId,
+            professionalId: technician.professionalId,
+            technicianUserId: technician.userId,
             appointment: Appointment(
               id: '',
               tenantId: '',
@@ -1418,13 +1413,11 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
         ' às '
         '${DateFormat('HH:mm', 'pt_BR').format(appointment.scheduledEnd)}';
 
-    final assignedIds = _assigned.map((t) => t.userId).toSet();
+    // Chaveado por profissional, não por usuário: parceiro externo não tem
+    // login e mesmo assim entra na agenda.
+    final assignedIds = _assigned.map((t) => t.professionalId).toSet();
     final available = widget.technicians
-        .where(
-          (technician) =>
-              technician.userId != null &&
-              !assignedIds.contains(technician.userId),
-        )
+        .where((technician) => !assignedIds.contains(technician.professionalId))
         .toList();
 
     return Column(
@@ -1468,7 +1461,8 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
                                     .read(appointmentRepositoryProvider)
                                     .unassignTechnician(
                                       appointmentId: appointment.id,
-                                      technicianUserId: technician.userId,
+                                      professionalId:
+                                          technician.professionalId,
                                     ),
                               ),
                     )
@@ -1490,7 +1484,7 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
           items: available
               .map(
                 (technician) => DropdownMenuItem(
-                  value: technician.userId,
+                  value: technician.professionalId,
                   child: Text(
                     '${technician.name} · ${technician.category}',
                     overflow: TextOverflow.ellipsis,
@@ -1507,7 +1501,7 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
                         .read(appointmentRepositoryProvider)
                         .assignTechnician(
                           appointmentId: appointment.id,
-                          technicianUserId: value,
+                          professionalId: value,
                         ),
                   );
                 },
@@ -2536,17 +2530,17 @@ class _CreateScheduleDialogState extends ConsumerState<_CreateScheduleDialog> {
                   technician?.professionalId == _selectedProfessionalId,
               orElse: () => null,
             );
-    final technicianUserId = selectedTechnician?.userId;
-    if (technicianUserId == null) {
+    if (selectedTechnician == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Este profissional ainda não está vinculado a um usuário interno. Faça o vínculo no cadastro do profissional para liberar o agendamento.',
-          ),
-        ),
+        const SnackBar(content: Text('Selecione um profissional.')),
       );
       return;
     }
+    // Parceiro externo não tem usuário do sistema e mesmo assim é agendável:
+    // quem identifica o atendimento é o profissional.
+    final professionalId = selectedTechnician.professionalId;
+    final technicianUserId = selectedTechnician.userId;
+
     if (_mode == _ScheduleMode.quote) {
       final request = _selectedRequest;
       if (request == null) return;
@@ -2555,6 +2549,7 @@ class _CreateScheduleDialogState extends ConsumerState<_CreateScheduleDialog> {
             referenceId: request.id,
             customerId: request.customerId,
             addressId: request.addressId,
+            professionalId: professionalId,
             technicianUserId: technicianUserId,
             scheduledStart: _start,
             scheduledEnd: _end,
@@ -2568,6 +2563,7 @@ class _CreateScheduleDialogState extends ConsumerState<_CreateScheduleDialog> {
             referenceId: workOrder.id,
             customerId: workOrder.customerId,
             addressId: workOrder.addressId,
+            professionalId: professionalId,
             technicianUserId: technicianUserId,
             scheduledStart: _start,
             scheduledEnd: _end,

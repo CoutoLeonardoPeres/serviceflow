@@ -14,7 +14,8 @@
 -- Como executar:
 --   psql $DATABASE_URL -f test/isolation/0025_appointment_multi_technician_test.sql
 -- Substitua os \set abaixo pelos UUIDs reais do seed antes de executar.
--- Requer DOIS tecnicos ativos no tenant alpha.
+-- Requer DOIS tecnicos ativos no tenant alpha, ambos com
+-- service_professionals.linked_user_id apontando para eles.
 -- =============================================================================
 
 \set ON_ERROR_STOP on
@@ -70,7 +71,7 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- T1: acrescentar um segundo profissional
   -- ─────────────────────────────────────────────────────────────────────────
-  PERFORM assign_technician(v_appointment, :'USER_TECH2');
+  PERFORM assign_technician(v_appointment, :'USER_TECH2', NULL);
 
   SELECT COUNT(*) INTO v_count
   FROM appointment_assignments
@@ -92,7 +93,7 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- T2: atribuir de novo quem ja esta e idempotente
   -- ─────────────────────────────────────────────────────────────────────────
-  PERFORM assign_technician(v_appointment, :'USER_TECH2');
+  PERFORM assign_technician(v_appointment, :'USER_TECH2', NULL);
 
   SELECT COUNT(*) INTO v_count
   FROM appointment_assignments
@@ -112,7 +113,7 @@ BEGIN
   );
 
   BEGIN
-    PERFORM assign_technician(v_other, :'USER_TECH2');
+    PERFORM assign_technician(v_other, :'USER_TECH2', NULL);
     -- TECH2 esta livre nesse horario, entao a atribuicao deve passar.
     RAISE NOTICE 'PASSOU T3a: tecnico livre em outro horario e aceito';
   EXCEPTION
@@ -123,7 +124,7 @@ BEGIN
   -- Agora TECH2 esta nos dois horarios distintos. Um terceiro atendimento
   -- sobreposto ao primeiro precisa recusa-lo.
   BEGIN
-    PERFORM assign_technician(v_appointment, :'USER_TECH');
+    PERFORM assign_technician(v_appointment, :'USER_TECH', NULL);
     RAISE NOTICE 'PASSOU T3b: titular do proprio atendimento e idempotente';
   EXCEPTION
     WHEN check_violation THEN
@@ -134,7 +135,7 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- T4: remover o segundo profissional
   -- ─────────────────────────────────────────────────────────────────────────
-  PERFORM unassign_technician(v_appointment, :'USER_TECH2');
+  PERFORM unassign_technician(v_appointment, :'USER_TECH2', NULL);
 
   SELECT COUNT(*) INTO v_count
   FROM appointment_assignments
@@ -155,7 +156,7 @@ BEGIN
   -- T5: remover o ultimo profissional e recusado
   -- ─────────────────────────────────────────────────────────────────────────
   BEGIN
-    PERFORM unassign_technician(v_appointment, :'USER_TECH');
+    PERFORM unassign_technician(v_appointment, :'USER_TECH', NULL);
     RAISE EXCEPTION 'FALHOU T5: atendimento ficou sem nenhum profissional';
   EXCEPTION
     WHEN check_violation THEN
@@ -165,7 +166,7 @@ BEGIN
   -- ─────────────────────────────────────────────────────────────────────────
   -- T6: reatribuir quem ja saiu (constraint unica nao atrapalha)
   -- ─────────────────────────────────────────────────────────────────────────
-  PERFORM assign_technician(v_appointment, :'USER_TECH2');
+  PERFORM assign_technician(v_appointment, :'USER_TECH2', NULL);
 
   SELECT COUNT(*) INTO v_count
   FROM appointment_assignments
@@ -181,7 +182,7 @@ BEGIN
   PERFORM cancel_appointment(v_appointment, 'Teste');
 
   BEGIN
-    PERFORM assign_technician(v_appointment, :'USER_TECH2');
+    PERFORM assign_technician(v_appointment, :'USER_TECH2', NULL);
     RAISE EXCEPTION 'FALHOU T7: atendimento cancelado aceitou profissional';
   EXCEPTION
     WHEN check_violation THEN
@@ -196,7 +197,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object('sub', :'USER_BETA')::text, true);
 
   BEGIN
-    PERFORM assign_technician(v_other, :'USER_TECH');
+    PERFORM assign_technician(v_other, :'USER_TECH', NULL);
     RAISE EXCEPTION 'FALHOU T8: beta_owner atribuiu em atendimento do alpha';
   EXCEPTION
     WHEN no_data_found OR insufficient_privilege THEN

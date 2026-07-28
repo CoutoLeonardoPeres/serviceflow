@@ -41,7 +41,7 @@ class AppointmentRepository {
   }) async {
     try {
       var query = _db.from(_table).select(
-            '*, customers(name), service_requests(title), appointment_assignments!inner(technician_user_id, revoked_at, profiles(full_name, phone))',
+            '*, customers(name), service_requests(title), appointment_assignments!inner(technician_user_id, professional_id, revoked_at, profiles(full_name, phone))',
           );
 
       if (filter.status != null) {
@@ -83,7 +83,7 @@ class AppointmentRepository {
       final row = await _db
           .from(_table)
           .select(
-            '*, customers(name), service_requests(title), appointment_assignments(technician_user_id, revoked_at, profiles(full_name, phone))',
+            '*, customers(name), service_requests(title), appointment_assignments(technician_user_id, professional_id, revoked_at, profiles(full_name, phone))',
           )
           .eq('id', id)
           .single();
@@ -100,12 +100,16 @@ class AppointmentRepository {
 
   Future<Appointment> schedule({
     required Appointment appointment,
-    required String technicianUserId,
+    required String professionalId,
+    String? technicianUserId,
   }) async {
     try {
       final appointmentId = await _db.rpc(
         'schedule_appointment',
-        params: appointment.toScheduleParams(technicianUserId),
+        params: appointment.toScheduleParams(
+          professionalId: professionalId,
+          technicianUserId: technicianUserId,
+        ),
       );
       return get(appointmentId as String);
     } on PostgrestException catch (e) {
@@ -143,14 +147,14 @@ class AppointmentRepository {
   /// um serviço pode exigir eletricista mais ajudante. Idempotente.
   Future<void> assignTechnician({
     required String appointmentId,
-    required String technicianUserId,
+    required String professionalId,
   }) async {
     try {
       await _db.rpc(
         'assign_technician',
         params: {
           'p_appointment_id': appointmentId,
-          'p_technician_user_id': technicianUserId,
+          'p_professional_id': professionalId,
         },
       );
     } on PostgrestException catch (e) {
@@ -164,14 +168,14 @@ class AppointmentRepository {
   /// o horário use [cancel], que devolve o item para a fila.
   Future<void> unassignTechnician({
     required String appointmentId,
-    required String technicianUserId,
+    required String professionalId,
   }) async {
     try {
       await _db.rpc(
         'unassign_technician',
         params: {
           'p_appointment_id': appointmentId,
-          'p_technician_user_id': technicianUserId,
+          'p_professional_id': professionalId,
         },
       );
     } on PostgrestException catch (e) {
