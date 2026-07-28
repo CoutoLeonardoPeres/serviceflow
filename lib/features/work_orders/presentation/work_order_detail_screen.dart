@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import '../../../core/config/env_config.dart';
 import '../../../core/error/app_error.dart';
 import '../../../core/files/attachment_link_action.dart';
 import '../../../core/router/app_router.dart';
@@ -163,7 +164,7 @@ class WorkOrderDetailScreen extends ConsumerWidget {
           .read(workOrderRepositoryProvider)
           .createSatisfactionPublicLink(workOrder.id);
       final link =
-          '${Uri.base.origin}/#${AppRoutes.satisfactionPublic(token)}';
+          EnvConfig.publicUrl(AppRoutes.satisfactionPublic(token));
 
       if (!context.mounted) return;
 

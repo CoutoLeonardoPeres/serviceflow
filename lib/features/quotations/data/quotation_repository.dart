@@ -324,7 +324,12 @@ class QuotationRepository {
           : <QuotationItem>[];
       return (quotation: quotationFromRow(map), items: items);
     } on PostgrestException catch (e) {
-      throw _mapError(e);
+      // Sem o codigo/mensagem do banco aqui, qualquer falha do link publico
+      // vira "link invalido" e nao da para saber se foi token, schema ou RLS.
+      throw BusinessRuleError(
+        'Nao foi possivel abrir o orcamento: ${e.code ?? ''} ${e.message}'
+            .trim(),
+      );
     } catch (e) {
       throw UnexpectedError('Erro ao abrir orcamento publico.', e.toString());
     }

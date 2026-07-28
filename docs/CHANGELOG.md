@@ -1,5 +1,42 @@
 # Changelog
 
+## [OS automática na aprovação do orçamento] — 2026-07-27
+
+### Adicionado
+
+- **Orçamento aprovado gera a OS sozinho** (migration 0056). Antes a OS só
+  nascia se alguém clicasse "Gerar OS" — e quando o cliente aprovava pelo link
+  público ninguém clicava, então o orçamento ficava em `approved` e a execução
+  nunca começava. Pior: o caminho manual nem existia para o cliente, porque
+  `convert_approved_quotation_to_work_order` exige `current_tenant_id()` e
+  `work_orders.write`, que `anon` não tem.
+- A criação da OS saiu da RPC para `_sf_work_order_from_quotation`, chamada por
+  um trigger em `quotations` e também pela RPC manual — um caminho só, e
+  idempotente por `work_orders.quotation_id`, então trigger e botão juntos não
+  duplicam a OS. Quem autoriza continua sendo a função de decisão; depois de
+  aprovado, a OS é consequência e não uma segunda autorização.
+- Aprovando pelo sistema, a tela já navega para a OS criada.
+
+## [Link público do orçamento] — 2026-07-27
+
+### Corrigido
+
+- **Todo link enviado a terceiros apontava para `localhost`.** O orçamento
+  público, a pesquisa de satisfação e o convite montavam a URL com
+  `Uri.base.origin`, que em desenvolvimento vale `http://localhost:PORT` — o
+  cliente que recebia o link no WhatsApp abria a própria máquina dele e não
+  chegava a lugar nenhum. Em build desktop era pior: `origin` lança
+  `StateError` para esquema `file:`. Agora a base sai de
+  `EnvConfig.publicUrl()`, que usa `APP_PUBLIC_BASE_URL` quando definido, o
+  domínio servido quando é um host real e cai em
+  `https://serviceflow.leonardoperescouto.com` no resto dos casos.
+  Para testar o link localmente, rode com
+  `--dart-define=APP_PUBLIC_BASE_URL=http://localhost:PORTA`.
+- **A tela pública escondia o motivo da falha.** Qualquer erro virava "Link
+  inválido, expirado ou indisponível", o que cobria desde token expirado até
+  erro de schema. Agora `getPublicByToken` propaga código e mensagem do banco
+  e a tela mostra o texto real.
+
 ## [Domínio de publicação: serviceflow.leonardoperescouto.com] — 2026-07-27
 
 O app passa a ser publicado em `https://serviceflow.leonardoperescouto.com`

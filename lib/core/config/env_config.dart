@@ -91,4 +91,37 @@ class EnvConfig {
       );
     }
   }
+
+  // ── Links compartilhados com terceiros ─────────────────────────────────────
+  /// Base dos links que saem do sistema (orcamento publico, pesquisa de
+  /// satisfacao, convite). NAO pode sair de `Uri.base`: em localhost isso gera
+  /// `http://localhost:PORT`, que so abre na maquina de quem gerou o link — o
+  /// cliente que recebe no WhatsApp nunca consegue abrir. Em build desktop
+  /// `Uri.base.origin` ainda por cima lanca StateError (esquema `file:`).
+  static const String _publicBaseUrlFromEnv =
+      String.fromEnvironment('APP_PUBLIC_BASE_URL');
+  static const String _defaultPublicBaseUrl =
+      'https://serviceflow.leonardoperescouto.com';
+
+  static String get publicBaseUrl {
+    final configured = _publicBaseUrlFromEnv.trim();
+    if (configured.isNotEmpty) {
+      return configured.endsWith('/')
+          ? configured.substring(0, configured.length - 1)
+          : configured;
+    }
+    // Servido de um dominio real: usa o proprio. localhost/127.0.0.1 nao serve
+    // para link externo, entao cai no dominio de publicacao.
+    final base = Uri.base;
+    if ((base.scheme == 'https' || base.scheme == 'http') &&
+        base.host.isNotEmpty &&
+        base.host != 'localhost' &&
+        base.host != '127.0.0.1') {
+      return base.origin;
+    }
+    return _defaultPublicBaseUrl;
+  }
+
+  /// Monta um link publico completo a partir de uma rota do app.
+  static String publicUrl(String routePath) => '$publicBaseUrl/#$routePath';
 }

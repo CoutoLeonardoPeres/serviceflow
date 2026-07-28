@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/config/env_config.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/validators.dart';
 import '../../communications/application/communication_notifier.dart';
@@ -878,7 +879,7 @@ class _InviteMemberDialogState extends ConsumerState<_InviteMemberDialog> {
       // Domínio vem de onde o app está servido, não escrito no código: com a
       // URL fixa, trocar de domínio gerava convite apontando para o antigo.
       // Mesma abordagem dos links públicos de orçamento e pesquisa.
-      final baseUrl = '${Uri.base.origin}/#/aceitar-convite';
+      final baseUrl = EnvConfig.publicUrl('/aceitar-convite');
       final inviteLink =
           '$baseUrl?invite=${result.token}&tenant=${tenant?['slug'] ?? ''}';
 

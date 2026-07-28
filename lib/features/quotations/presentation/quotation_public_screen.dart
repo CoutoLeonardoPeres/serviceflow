@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/error/app_error.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/neomorphic.dart';
 import '../application/quotation_list_notifier.dart';
@@ -59,8 +60,12 @@ class _QuotationPublicScreenState extends ConsumerState<QuotationPublicScreen> {
             constraints: const BoxConstraints(maxWidth: 760),
             child: quoteAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const ErrorView(
-                message: 'Link inválido, expirado ou indisponível.',
+              // Mostra o motivo real: "link inválido" cobria desde token
+              // expirado até falha de schema, e escondia qual era o caso.
+              error: (error, __) => ErrorView(
+                message: error is AppError
+                    ? error.userMessage
+                    : 'Link inválido, expirado ou indisponível.\n\n$error',
               ),
               data: (result) {
                 final quote = result.quotation;

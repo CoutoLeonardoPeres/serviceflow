@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/env_config.dart';
 import '../../../core/error/app_error.dart';
 import '../../../core/files/attachment_link_action.dart';
 import '../../../core/files/stored_attachment.dart';
@@ -39,7 +40,7 @@ class QuotationDetailScreen extends ConsumerWidget {
       final token = await ref
           .read(quotationRepositoryProvider)
           .createPublicLink(quote.id);
-      final link = '${Uri.base.origin}/#${AppRoutes.quotationPublic(token)}';
+      final link = EnvConfig.publicUrl(AppRoutes.quotationPublic(token));
       await Clipboard.setData(ClipboardData(text: link));
       ref.invalidate(quotationDetailProvider(quote.id));
       messenger.showSnackBar(
@@ -106,14 +107,16 @@ class QuotationDetailScreen extends ConsumerWidget {
           );
       ref.invalidate(quotationDetailProvider(quote.id));
       ref.invalidate(quotationListProvider);
+      if (decision == QuotationPublicDecision.approved) {
+        // A OS ja foi criada pelo trigger da aprovacao (0056). A RPC e
+        // idempotente: aqui ela so devolve a OS existente — e ainda cobre o
+        // banco sem a migration aplicada, criando na hora.
+        if (!context.mounted) return;
+        await _convertToWorkOrder(context, ref, quote);
+        return;
+      }
       messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            decision == QuotationPublicDecision.approved
-                ? 'Orçamento aprovado. Já pode gerar a OS.'
-                : 'Resposta registrada.',
-          ),
-        ),
+        const SnackBar(content: Text('Resposta registrada.')),
       );
     } catch (e) {
       messenger.showSnackBar(
@@ -150,7 +153,7 @@ class QuotationDetailScreen extends ConsumerWidget {
       final token = await ref
           .read(quotationRepositoryProvider)
           .createPublicLink(quote.id);
-      final link = '${Uri.base.origin}/#${AppRoutes.quotationPublic(token)}';
+      final link = EnvConfig.publicUrl(AppRoutes.quotationPublic(token));
       final currency = NumberFormat.simpleCurrency(locale: 'pt_BR');
       final message = Uri.encodeComponent(
         'Olá! Segue o orçamento ${quote.displayNumber}'
