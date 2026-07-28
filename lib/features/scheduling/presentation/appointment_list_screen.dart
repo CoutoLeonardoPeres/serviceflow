@@ -185,6 +185,10 @@ class _MonthCalendarDialog extends ConsumerStatefulWidget {
 class _MonthCalendarDialogState extends ConsumerState<_MonthCalendarDialog> {
   late DateTime _visibleMonth;
 
+  /// Nulo = visão geral (todos os profissionais). Selecionar alguém na
+  /// sidebar restringe o calendário aos atendimentos dele.
+  String? _selectedProfessionalId;
+
   @override
   void initState() {
     super.initState();
@@ -220,6 +224,8 @@ class _MonthCalendarDialogState extends ConsumerState<_MonthCalendarDialog> {
         initialDate: day,
         appointments: appointments,
         pending: pending,
+        initialProfessionalId:
+            pending?.technician.professionalId ?? _selectedProfessionalId,
       ),
     );
     if (mounted) {
@@ -231,7 +237,17 @@ class _MonthCalendarDialogState extends ConsumerState<_MonthCalendarDialog> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appointmentListProvider);
-    final appointmentsByDay = _groupByDay(state.items);
+    final professionalId = _selectedProfessionalId;
+    final visible = professionalId == null
+        ? state.items
+        : state.items
+            .where(
+              (appointment) => appointment.technicians.any(
+                (technician) => technician.professionalId == professionalId,
+              ),
+            )
+            .toList();
+    final appointmentsByDay = _groupByDay(visible);
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -282,13 +298,21 @@ class _MonthCalendarDialogState extends ConsumerState<_MonthCalendarDialog> {
                       SizedBox(
                         width: 300,
                         child: _ProfessionSidebar(
-                          selectedProfessionalId: null,
+                          selectedProfessionalId: _selectedProfessionalId,
                           technicians: ref.watch(techniciansProvider).maybeWhen(
                                 data: (items) => items,
                                 orElse: () => const <Technician>[],
                               ),
-                          onSelectGeneral: () {},
-                          onSelectTechnician: (_) {},
+                          onSelectGeneral: () => setState(
+                            () => _selectedProfessionalId = null,
+                          ),
+                          onSelectTechnician: (technician) => setState(
+                            () => _selectedProfessionalId =
+                                _selectedProfessionalId ==
+                                        technician.professionalId
+                                    ? null
+                                    : technician.professionalId,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 18),
@@ -933,7 +957,12 @@ class _DayScheduleDialog extends ConsumerStatefulWidget {
     required this.initialDate,
     required this.appointments,
     this.pending,
+    this.initialProfessionalId,
   });
+
+  /// Abre já na agenda deste profissional — vem do filtro do calendário ou do
+  /// card arrastado.
+  final String? initialProfessionalId;
 
   final DateTime initialDate;
   final List<Appointment> appointments;
@@ -958,7 +987,7 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
     super.initState();
     // Vindo do arrasto sobre um dia, já abre na agenda do profissional dono
     // da fila — senão os horários mostrados seriam de outra pessoa.
-    _selectedProfessionalId = widget.pending?.technician.professionalId;
+    _selectedProfessionalId = widget.initialProfessionalId;
   }
 
   List<Appointment> get _allAppointments => [
