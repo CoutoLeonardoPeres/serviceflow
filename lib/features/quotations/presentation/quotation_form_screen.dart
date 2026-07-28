@@ -100,6 +100,27 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   ServiceRequest? _request;
   bool _initialRequestApplied = false;
 
+  /// Cliente para o qual o chamado já foi escolhido sozinho — evita repetir a
+  /// seleção depois que o usuário limpar o campo de propósito.
+  String? _autoPickedRequestFor;
+
+  /// Escolher o cliente já traz o chamado dele quando só existe um em aberto.
+  /// Sem isso o campo continuava vazio: o Autocomplete não abre a lista com o
+  /// texto em branco, então filtrar por cliente não bastava para "puxar".
+  void _autoPickSingleRequest(List<ServiceRequest> visible) {
+    final customer = _customer;
+    if (customer == null ||
+        _request != null ||
+        _autoPickedRequestFor == customer.id ||
+        visible.length != 1) {
+      return;
+    }
+    _autoPickedRequestFor = customer.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _request = visible.first);
+    });
+  }
+
   /// Pré-seleciona o chamado (e o cliente dele) quando o orçamento nasce de
   /// uma visita na agenda. Roda uma vez, assim que a lista de chamados chega —
   /// o `initialRequestId` sozinho não basta porque o dropdown compara objetos.
@@ -334,6 +355,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                           : items
                               .where((r) => r.customerId == customer.id)
                               .toList();
+                      _autoPickSingleRequest(visible);
                       return _RequestSearchField(
                         // Mesma razão da key do cliente: trocar o cliente
                         // limpa o chamado, e o campo precisa refletir isso.
@@ -343,9 +365,14 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         requests: visible,
                         selected: _request,
                         enabled: !isLoading,
-                        emptyHint: customer == null
+                        helper: customer == null
                             ? null
-                            : 'Nenhum chamado aberto para ${customer.name}.',
+                            : visible.isEmpty
+                                ? 'Nenhum chamado aberto para ${customer.name}.'
+                                : visible.length == 1
+                                    ? null
+                                    : '${visible.length} chamados abertos '
+                                        'deste cliente — toque para escolher.',
                         onChanged: (value) => setState(() {
                           _request = value;
                           // Trocar o chamado troca o cliente junto: orçamento
@@ -981,7 +1008,7 @@ class _RequestSearchField extends StatelessWidget {
     required this.selected,
     required this.onChanged,
     this.enabled = true,
-    this.emptyHint,
+    this.helper,
   });
 
   final List<ServiceRequest> requests;
@@ -989,9 +1016,9 @@ class _RequestSearchField extends StatelessWidget {
   final ValueChanged<ServiceRequest?> onChanged;
   final bool enabled;
 
-  /// Mensagem quando o cliente escolhido não tem chamado aberto — sem ela o
-  /// campo parece quebrado ao não sugerir nada.
-  final String? emptyHint;
+  /// Texto de apoio: quantos chamados o cliente tem, ou que não tem nenhum.
+  /// Sem ele o campo parece quebrado ao não sugerir nada com o texto vazio.
+  final String? helper;
 
   String _label(ServiceRequest request) =>
       '${request.displayNumber} · ${request.title}';
@@ -1023,7 +1050,7 @@ class _RequestSearchField extends StatelessWidget {
           decoration: InputDecoration(
             labelText: 'Chamado (opcional)',
             hintText: 'Buscar por número, título ou cliente',
-            helperText: requests.isEmpty ? emptyHint : null,
+            helperText: helper,
             suffixIcon: controller.text.isEmpty
                 ? const Icon(Icons.search_outlined)
                 : IconButton(
