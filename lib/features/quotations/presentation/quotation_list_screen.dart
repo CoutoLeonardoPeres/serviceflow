@@ -36,7 +36,7 @@ class _QuotationListScreenState extends ConsumerState<QuotationListScreen> {
     final created = await showAppFormDialog<bool>(
       context: context,
       title: 'Novo orçamento',
-      maxWidth: 940,
+      maxWidth: 1280,
       child: const QuotationFormScreen(embedded: true),
     );
     if (created == true && mounted) {
