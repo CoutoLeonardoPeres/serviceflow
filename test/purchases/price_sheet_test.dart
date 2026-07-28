@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serviceflow/features/purchases/domain/price_sheet.dart';
 
@@ -178,6 +180,15 @@ void main() {
       expect(sheet.validRows.single.priceCents, 349);
       expect(sheet.validRows.single.unit, 'm');
       expect(sheet.validRows.single.validUntil, DateTime(2026, 12, 31));
+      // A fórmula que protege o código de barras precisa ser desembrulhada.
+      expect(sheet.validRows.single.barcode, '7891234567890');
+      expect(sheet.validRows.single.name, 'Cabo flexível 2,5mm² azul');
+      expect(sheet.validRows.single.category, 'Material elétrico');
+    });
+
+    test('o modelo protege o código de barras contra o Excel', () {
+      // 13 dígitos sem proteção viram 7,89123E+12 na tela e no arquivo salvo.
+      expect(buildPriceSheetTemplate(), contains('="7891234567890"'));
     });
 
     test('o modelo tem todas as colunas documentadas', () {
@@ -185,4 +196,80 @@ void main() {
       expect(header, priceSheetColumns);
     });
   });
+
+  group('código de barras', () {
+    test('notação científica é recusada, não gravada', () {
+      // Gravar 7,89123E+12 cadastraria um código que não existe, e ninguém
+      // perceberia até tentar bipar o produto.
+      final sheet = parsePriceSheet(
+        'codigo_fornecedor;codigo_barras;preco\nA1;7,89123E+12;1,00',
+      );
+      expect(sheet.validRows, isEmpty);
+      expect(sheet.invalidRows.single.error, contains('notação científica'));
+    });
+
+    test('fórmula de texto é desembrulhada', () {
+      final sheet = parsePriceSheet(
+        'codigo_fornecedor;codigo_barras;preco\nA1;="7891234567890";1,00',
+      );
+      expect(sheet.validRows.single.barcode, '7891234567890');
+    });
+
+    test('código normal passa intocado', () {
+      final sheet = parsePriceSheet(
+        'codigo_fornecedor;codigo_barras;preco\nA1;7891234567890;1,00',
+      );
+      expect(sheet.validRows.single.barcode, '7891234567890');
+    });
+
+    test('coluna vazia não vira erro', () {
+      final sheet = parsePriceSheet(
+        'codigo_fornecedor;codigo_barras;preco\nA1;;1,00',
+      );
+      expect(sheet.validRows.single.barcode, isNull);
+    });
+  });
+
+  group('texto corrompido', () {
+    test('desfaz UTF-8 lido como MacRoman', () {
+      // "Material el√©trico" é o que chega quando o editor leu UTF-8 como
+      // MacRoman. Sem reparo, o produto entra no catálogo com o nome quebrado
+      // e nunca mais casa numa busca.
+      final quebrado = 'Material elétrico'.codeUnits.isEmpty
+          ? ''
+          : String.fromCharCodes(
+              utf8.encode('Material elétrico').map(_macRomanChar),
+            );
+      final sheet = parsePriceSheet(
+        'codigo_fornecedor;nome_produto;preco\nA1;$quebrado;1,00',
+      );
+      expect(sheet.validRows.single.name, 'Material elétrico');
+    });
+
+    test('desfaz UTF-8 lido como Latin-1', () {
+      final quebrado = latin1.decode(utf8.encode('Vidraçaria e esquadrias'));
+      final sheet = parsePriceSheet(
+        'codigo_fornecedor;nome_produto;preco\nA1;$quebrado;1,00',
+      );
+      expect(sheet.validRows.single.name, 'Vidraçaria e esquadrias');
+    });
+
+    test('texto correto passa intocado', () {
+      final sheet = parsePriceSheet(
+        'codigo_fornecedor;nome_produto;preco\nA1;Cabo flexível 2,5mm²;1,00',
+      );
+      expect(sheet.validRows.single.name, 'Cabo flexível 2,5mm²');
+    });
+  });
+}
+
+/// Mapeia byte alto para o caractere que o MacRoman mostraria — o inverso do
+/// que o reparo faz.
+int _macRomanChar(int byte) {
+  const tabela = {
+    0xC3: 0x221A, 0xA7: 0x00DF, 0xA3: 0x00A3, 0xA1: 0x00B0,
+    0xA9: 0x00A9, 0xAD: 0x2260, 0xAA: 0x2122, 0xB4: 0x00A5,
+    0xB2: 0x2264, 0xB9: 0x03C0,
+  };
+  return byte < 128 ? byte : (tabela[byte] ?? byte);
 }

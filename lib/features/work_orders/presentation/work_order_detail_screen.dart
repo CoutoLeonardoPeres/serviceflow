@@ -664,7 +664,14 @@ class WorkOrderDetailScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            NeomorphicPanel(
+            // Dados e composição lado a lado em tela larga: são as duas
+            // informações que se conferem juntas ("o que foi combinado" e
+            // "quanto dá"), e empilhadas obrigavam a rolar entre elas.
+            // Abaixo de 900px voltam a empilhar — em coluna estreita, duas
+            // colunas cortariam a descrição e os valores.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final dados = NeomorphicPanel(
               borderRadius: 20,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -713,9 +720,8 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                     ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-            NeomorphicPanel(
+            );
+                final composicao = NeomorphicPanel(
               borderRadius: 20,
               child: itemsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
@@ -753,6 +759,28 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+            );
+
+                if (constraints.maxWidth < 900) {
+                  return Column(
+                    children: [
+                      dados,
+                      const SizedBox(height: 16),
+                      composicao,
+                    ],
+                  );
+                }
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: dados),
+                      const SizedBox(width: 16),
+                      Expanded(child: composicao),
+                    ],
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
             evidenceAsync.when(

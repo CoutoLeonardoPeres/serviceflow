@@ -7,6 +7,8 @@
 /// decimal e campos entre aspas.
 library;
 
+import 'dart:convert';
+
 /// Uma linha lida da planilha, ainda sem contato com o banco.
 class PriceSheetRow {
   const PriceSheetRow({
@@ -90,19 +92,25 @@ const _requiredColumns = <String>['codigo_fornecedor', 'preco'];
 /// Modelo em branco, com uma linha de exemplo. O exemplo existe porque
 /// planilha vazia com só cabeçalho gera dúvida sobre formato de data e
 /// decimal — e a dúvida volta como arquivo mal preenchido.
+///
+/// O código de barras sai como `="789..."`. Sem isso o Excel trata 13 dígitos
+/// como número e mostra `7,89123E+12`; ao salvar, o arquivo volta com a
+/// notação científica no lugar do código, e o produto seria cadastrado com
+/// código de barras errado. A fórmula força texto e é entendida por Excel,
+/// LibreOffice e Google Sheets.
 String buildPriceSheetTemplate() {
   final buffer = StringBuffer()
     ..writeln(priceSheetColumns.join(';'))
     ..writeln(
       'CAB-25;Cabo flexível 2,5mm² azul;m;Material elétrico;Prysmian;'
-      '7891234567890;3,49;100;10;31/12/2026',
+      '="7891234567890";3,49;100;10;31/12/2026',
     );
   return buffer.toString();
 }
 
 /// Lê o conteúdo do arquivo. Detecta o separador pela linha de cabeçalho.
 PriceSheet parsePriceSheet(String content) {
-  final text = content.replaceFirst('﻿', '');
+  final text = repairMojibake(content.replaceFirst('﻿', ''));
   final lines = _splitRecords(text);
   if (lines.isEmpty) {
     return const PriceSheet(
@@ -162,6 +170,22 @@ PriceSheet parsePriceSheet(String content) {
       continue;
     }
 
+    // Código de barras que voltou como 7,89123E+12 não é código: é o que
+    // sobrou depois de o Excel tratar 13 dígitos como número. Gravar isso
+    // cadastraria o produto com um código que não existe, e ninguém
+    // perceberia até tentar bipar.
+    final barcode = _cleanBarcode(field('codigo_barras'));
+    if (barcode == _scientificNotation) {
+      rows.add(PriceSheetRow(
+        line: line,
+        supplierCode: code,
+        name: field('nome_produto'),
+        error: 'Código de barras veio em notação científica '
+            '(o Excel converteu). Formate a coluna como Texto e reenvie.',
+      ));
+      continue;
+    }
+
     rows.add(PriceSheetRow(
       line: line,
       supplierCode: code,
@@ -169,7 +193,7 @@ PriceSheet parsePriceSheet(String content) {
       unit: field('unidade')?.toLowerCase(),
       category: field('categoria'),
       brand: field('marca'),
-      barcode: field('codigo_barras'),
+      barcode: barcode,
       priceCents: priceCents,
       packQuantity: _parseNumber(field('embalagem')) ?? 1,
       minQuantity: _parseNumber(field('quantidade_minima')) ?? 0,
@@ -298,4 +322,82 @@ DateTime? _parseDate(String? raw) {
     );
   }
   return DateTime.tryParse(value);
+}
+
+
+/// Marcador interno: o valor não é aproveitável, a linha precisa ser recusada.
+const _scientificNotation = '\u0000cientifica';
+
+/// Limpa o que as planilhas fazem com código de barras.
+///
+/// `="789..."` é a fórmula que o próprio modelo usa para forçar texto —
+/// chega de volta assim e precisa ser desembrulhada. Notação científica é
+/// perda de informação e não tem conserto: o número original não está mais
+/// ali.
+String? _cleanBarcode(String? raw) {
+  if (raw == null) return null;
+  var value = raw.trim();
+
+  final formula = RegExp(r'^="?([^"]*)"?$').firstMatch(value);
+  if (formula != null) value = formula.group(1)!.trim();
+  value = value.replaceAll('"', '').trim();
+  if (value.isEmpty) return null;
+
+  if (RegExp(r'^\d+([.,]\d+)?[eE][+-]?\d+$').hasMatch(value)) {
+    return _scientificNotation;
+  }
+  return value;
+}
+
+/// Desfaz texto UTF-8 que foi lido como Latin-1 ou MacRoman.
+///
+/// Acontece quando a planilha passa por um editor que não reconheceu a
+/// codificação — "Material elétrico" chega como "Material el√©trico" ou
+/// "Material elÃ©trico". Sem isso o produto entra no catálogo com o nome
+/// corrompido e nunca mais casa numa busca.
+///
+/// Só age quando encontra as marcas típicas; texto correto passa intocado.
+String repairMojibake(String text) {
+  const marcasMac = ['√ß', '√£', '√°', '√©', '√≠', '√™', '√¥', '√µ', '√∫'];
+  const marcasLatin = ['Ã§', 'Ã£', 'Ã¡', 'Ã©', 'Ã­', 'Ãª', 'Ã´', 'Ãµ', 'Ãº'];
+
+  if (marcasLatin.any(text.contains)) {
+    try {
+      return utf8.decode(latin1.encode(text));
+    } catch (_) {
+      return text;
+    }
+  }
+  if (marcasMac.any(text.contains)) {
+    try {
+      return utf8.decode(_macRomanEncode(text));
+    } catch (_) {
+      return text;
+    }
+  }
+  return text;
+}
+
+/// Só os caracteres que o MacRoman usa para os bytes altos de UTF-8 em
+/// português. Uma tabela completa seria 128 entradas para resolver as 20 que
+/// aparecem de fato.
+const _macRomanReverse = <String, int>{
+  '√': 0xC3, 'ß': 0xA7, '£': 0xA3, '°': 0xA1, '©': 0xA9, '≠': 0xAD,
+  '™': 0xAA, '¥': 0xB4, 'µ': 0xB5, '∫': 0xBA, '¢': 0xA2, '§': 0xA4,
+  '•': 0xA5, '¶': 0xA6, '®': 0xA8, '¨': 0xAC, '±': 0xB1, '‰': 0xE9,
+  '¬': 0xC2, 'Œ': 0xCE, '≤': 0xB2, '≥': 0xB3, 'π': 0xB9, '∂': 0xB6,
+};
+
+List<int> _macRomanEncode(String text) {
+  final bytes = <int>[];
+  for (final rune in text.runes) {
+    if (rune < 128) {
+      bytes.add(rune);
+      continue;
+    }
+    final mapped = _macRomanReverse[String.fromCharCode(rune)];
+    if (mapped == null) throw const FormatException('fora da tabela MacRoman');
+    bytes.add(mapped);
+  }
+  return bytes;
 }
