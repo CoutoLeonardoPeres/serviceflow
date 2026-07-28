@@ -259,6 +259,22 @@ class AppTheme {
           ),
         ),
       ),
+      // Mesma altura do filled: sem isto os OutlinedButton caem no padrao M3
+      // de 40px, e as acoes de campo (horas, material, evidencia) ficavam com
+      // alvo de toque menor que as acoes que o tecnico nao deve tocar.
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 58),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          side: BorderSide(color: colorScheme.outline),
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+          ),
+        ),
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: colorScheme.primary,

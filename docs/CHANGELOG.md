@@ -1,5 +1,78 @@
 # Changelog
 
+## [Encerramento da cadeia e reabertura em 30 dias] — 2026-07-28
+
+Fecha a metade de baixo do encadeamento (migration 0058). A 0056 já ligava
+orçamento aprovado → OS; faltava o que acontece quando o trabalho acaba.
+
+### Adicionado
+
+- **OS concluída fecha o chamado de origem.** Antes o chamado ficava para
+  sempre em `converted_to_work_order` e a lista de chamados abertos crescia
+  com trabalho que já tinha terminado. A conclusão também fica registrada no
+  histórico do orçamento — sem isso, olhando só o orçamento não dava para
+  saber se a OS foi feita.
+- **Orçamento recusado ou expirado fecha o chamado**, pelo mesmo motivo.
+- **`reopen_quotation`** devolve orçamento e chamado ao jogo dentro de 30 dias
+  da recusa. A janela conta a partir do registro da recusa, não da criação: um
+  orçamento feito há 60 dias e recusado ontem ainda merece reabertura.
+  Orçamento aprovado não reabre (viraria duas OS para o mesmo trabalho) e
+  cancelado também não — foi decisão deliberada da casa.
+- **Botão "Reabrir orçamento"** aparece só dentro do prazo, dizendo quantos
+  dias restam. Passado o prazo, o texto explica que o caminho é criar um
+  orçamento novo. O diálogo avisa que os valores continuam os da proposta
+  recusada.
+
+## [Máquina de estados da OS e barra de ações por status] — 2026-07-28
+
+Correções do `/impeccable critique` da tela de OS. Duas delas não eram estética.
+
+### Corrigido
+
+- **Cobrança de serviço não prestado** (migration 0057). `create_receivable_from_work_order`
+  não olhava o status — a única guarda era `total_cents <= 0`. Como a OS nasce
+  do orçamento aprovado já com valor, um toque em "Gerar cobrança" numa OS
+  recém-aberta lançava recebível na conta de um cliente real. Agora exige OS
+  concluída.
+- **A OS não tinha máquina de estados** (migration 0057). `transition_work_order`
+  validava só se o status era um nome conhecido e se o atual não era terminal:
+  qualquer status → qualquer status passava, inclusive `opened` → `done`. OS
+  fechada sem uma hora lançada, sem material, sem evidência e sem aceite — e,
+  uma vez `done`, irreversível. Agora as transições permitidas são explícitas,
+  espelhadas em `WorkOrderStatus.allowedNext` e cobertas por teste.
+- **Repetir o status virava erro e sujava o histórico.** Dois toques na rede
+  instável do campo gravavam dois eventos. Agora é no-op silencioso.
+- **A interface não sabia o que o usuário podia fazer.** `currentRoleKeyProvider`
+  existia e nunca foi usado; não havia como ler as permissões do papel. Nova
+  RPC `my_permissions()` + `hasPermissionProvider`. Falha aberto de propósito:
+  quem impede de fato é o banco, e falhar fechado deixaria a tela sem nenhuma
+  ação num banco desatualizado.
+- **Mensagem de erro apagava a causa.** `_mapError` colapsava todo `P0001` em
+  "Revise os dados da OS." / "Revise os itens do orcamento.", jogando fora as
+  mensagens específicas que o banco já escreve em português. Corrigido na OS e
+  no orçamento.
+- **Alvo de toque invertido.** Não existia `outlinedButtonTheme`: os botões
+  contornados caíam no padrão M3 de 40px enquanto os preenchidos tinham 58px —
+  ou seja, as ações de campo do técnico eram menores que as que ele não deve
+  tocar. Agora ambos têm 58px, no app inteiro.
+- **`WorkOrderStatusChip` usava `Colors.*` fixos**, incluindo roxo para
+  "Aberta" — colidia com a marca de qualquer tenant não-roxo. Agora sai do
+  `ColorScheme`.
+- **`item.kind` cru na tela** (`labor_hour`, `travel`). O enum com os rótulos
+  em português já existia e não estava sendo usado.
+
+### Alterado
+
+- **Barra de ações da OS derivada do status.** Eram dez botões num `Wrap`
+  plano, três deles com peso de ação principal ao mesmo tempo. Agora: uma ação
+  primária conforme o status, as ações de campo ao lado, o resto em "Mais
+  ações". O que o banco recusaria não é renderizado desabilitado — some.
+- **Concluir OS agora pede confirmação** com o resumo do que ficou registrado
+  (horas, materiais, despesas, evidências), porque a ação é irreversível.
+- **Mesmo tratamento na tela de orçamento**, que tinha o mesmo `Wrap` plano com
+  múltiplos primários. Em orçamento aprovado a ação primária virou "Abrir OS" —
+  a OS já nasce com a aprovação desde a 0056.
+
 ## [OS automática na aprovação do orçamento] — 2026-07-27
 
 ### Adicionado

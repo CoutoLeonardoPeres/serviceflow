@@ -61,10 +61,16 @@ void main() {
     );
     await tester.pump();
 
+    // Uma ação primária conforme o status; link e revogação foram para o
+    // menu. Antes eram três FilledButton competindo entre si na mesma barra.
+    expect(find.text('Gerar PDF'), findsWidgets);
+    expect(find.text('Arquivos do orçamento'), findsOneWidget);
+    expect(find.text('Mais ações'), findsOneWidget);
+
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
     expect(find.text('Copiar link público'), findsOneWidget);
     expect(find.text('Revogar link público'), findsOneWidget);
-    expect(find.text('Gerar PDF'), findsOneWidget);
-    expect(find.text('Arquivos do orçamento'), findsOneWidget);
   });
 
   testWidgets('QuotationDetailScreen mostra acao para gerar OS quando aprovado',
@@ -113,7 +119,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Gerar OS'), findsOneWidget);
+    // A OS já nasce com a aprovação (trigger da 0056); a ação aqui é abrir a
+    // que existe, não criar uma segunda.
+    expect(find.text('Abrir OS'), findsOneWidget);
   });
 
   // ── F2-P1: novos comportamentos ──────────────────────────────────────────
@@ -165,6 +173,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
     expect(find.text('Cancelar orçamento'), findsOneWidget);
   });
 
@@ -194,6 +204,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
     expect(find.text('Cancelar orçamento'), findsNothing);
   });
 
@@ -223,6 +235,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
     expect(find.text('Cancelar orçamento'), findsNothing);
   });
 

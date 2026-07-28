@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../domain/work_order.dart';
 
+/// Selo de status da OS.
+///
+/// As cores saem do `ColorScheme`, não de `Colors.*` fixos: a cor de destaque
+/// é variável por empresa (white-label), e um "Aberta" roxo cravado no código
+/// colidia com a marca de qualquer tenant que não fosse roxo.
 class WorkOrderStatusChip extends StatelessWidget {
   const WorkOrderStatusChip({super.key, required this.status});
 
@@ -9,15 +14,16 @@ class WorkOrderStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final color = switch (status) {
-      WorkOrderStatus.done => Colors.green,
-      WorkOrderStatus.cancelled => Colors.red,
-      WorkOrderStatus.inProgress => Colors.indigo,
-      WorkOrderStatus.scheduled => Colors.teal,
-      WorkOrderStatus.awaitingCustomer => Colors.orange,
-      WorkOrderStatus.paused => Colors.blueGrey,
-      WorkOrderStatus.opened => Colors.purple,
-      WorkOrderStatus.draft => Colors.grey,
+      WorkOrderStatus.done => scheme.primary,
+      WorkOrderStatus.cancelled => scheme.error,
+      WorkOrderStatus.inProgress => scheme.tertiary,
+      WorkOrderStatus.scheduled => scheme.secondary,
+      WorkOrderStatus.awaitingCustomer => scheme.secondary,
+      WorkOrderStatus.paused => scheme.outline,
+      WorkOrderStatus.opened => scheme.onSurfaceVariant,
+      WorkOrderStatus.draft => scheme.outlineVariant,
     };
 
     return Chip(

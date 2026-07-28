@@ -29,6 +29,15 @@ import '../application/work_order_list_notifier.dart';
 import '../domain/work_order.dart';
 import 'widgets/work_order_status_chip.dart';
 
+/// `WorkOrderItem.kind` vem cru do banco (`labor_hour`, `travel`). O enum com
+/// os rotulos em portugues ja existia e nao estava sendo usado na tela.
+String _itemKindLabel(String kind) {
+  for (final value in WorkOrderItemKind.values) {
+    if (value.value == kind) return value.label;
+  }
+  return kind;
+}
+
 class WorkOrderDetailScreen extends ConsumerWidget {
   const WorkOrderDetailScreen({super.key, required this.workOrderId});
 
@@ -57,6 +66,89 @@ class WorkOrderDetailScreen extends ConsumerWidget {
         SnackBar(content: Text(e.toString())),
       );
     }
+  }
+
+  /// Concluir é irreversível: o banco recusa qualquer mudança depois de `done`
+  /// (0057). Antes de fechar, mostra o que ficou registrado — era o passo que
+  /// faltava para não fechar OS sem hora, sem material e sem evidência.
+  Future<void> _completeWorkOrder(
+    BuildContext context,
+    WidgetRef ref,
+    WorkOrder workOrder,
+    List<WorkOrderItem> items,
+    int evidenceCount,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Concluir OS'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Depois de concluída, a OS não muda mais de status.'),
+            const SizedBox(height: 14),
+            Text(
+              'Registrado até agora',
+              style: Theme.of(dialogContext).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 6),
+            ..._completionSummary(items, evidenceCount).map(
+              (line) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      line.ok
+                          ? Icons.check_circle_outline
+                          : Icons.remove_circle_outline,
+                      size: 16,
+                      color: line.ok
+                          ? Theme.of(dialogContext).colorScheme.primary
+                          : Theme.of(dialogContext).colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(line.text)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Concluir OS'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _transition(context, ref, WorkOrderStatus.done);
+  }
+
+  List<({String text, bool ok})> _completionSummary(
+    List<WorkOrderItem> items,
+    int evidenceCount,
+  ) {
+    int countOf(Set<String> kinds) =>
+        items.where((i) => kinds.contains(i.kind)).length;
+
+    final hours = countOf({'labor_hour'});
+    final materials = countOf({'material', 'equipment'});
+    final expenses = countOf({'travel', 'extra', 'other'});
+
+    return [
+      (text: '$hours lançamento(s) de hora', ok: hours > 0),
+      (text: '$materials material(is) ou equipamento(s)', ok: materials > 0),
+      (text: '$expenses despesa(s)', ok: expenses > 0),
+      (text: '$evidenceCount evidência(s) anexada(s)', ok: evidenceCount > 0),
+    ];
   }
 
   Future<void> _openTimeEntryDialog(BuildContext context, WidgetRef ref) async {
@@ -467,99 +559,33 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: () => _transition(
-                          context,
-                          ref,
-                          WorkOrderStatus.inProgress,
-                        ),
-                        icon: const Icon(Icons.play_arrow_outlined),
-                        label: const Text('Iniciar execução'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _transition(
-                          context,
-                          ref,
-                          WorkOrderStatus.done,
-                        ),
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('Concluir OS'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _openTimeEntryDialog(context, ref),
-                        icon: const Icon(Icons.timer_outlined),
-                        label: const Text('Registrar horas'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _openMaterialDialog(context, ref),
-                        icon: const Icon(Icons.inventory_2_outlined),
-                        label: const Text('Adicionar material'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _openExpenseDialog(context, ref),
-                        icon: const Icon(Icons.receipt_long_outlined),
-                        label: const Text('Registrar despesa'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () =>
-                            _openEvidenceDialog(context, ref, workOrder),
-                        icon: const Icon(Icons.attach_file_outlined),
-                        label: const Text('Anexar foto/evidência'),
-                      ),
-                      FilledButton.icon(
-                        onPressed: () =>
-                            _openAcceptanceDialog(context, ref, workOrder),
-                        icon: const Icon(Icons.verified_outlined),
-                        label: const Text('Registrar aceite'),
-                      ),
-                      FilledButton.icon(
-                        onPressed: () => _createReceivable(context, ref),
-                        icon: const Icon(Icons.account_balance_wallet_outlined),
-                        label: const Text('Gerar cobrança'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: workOrder.status == WorkOrderStatus.done
-                            ? () =>
-                                _openSatisfactionDialog(context, ref, workOrder)
-                            : null,
-                        icon:
-                            const Icon(Icons.sentiment_satisfied_alt_outlined),
-                        label: const Text('Registrar satisfação'),
-                      ),
-                      if (workOrder.status == WorkOrderStatus.done)
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              _sendSatisfactionSurvey(context, ref, workOrder),
-                          icon: const Icon(Icons.poll_outlined),
-                          label: const Text('Enviar pesquisa'),
-                        ),
-                      if (workOrder.status == WorkOrderStatus.done)
-                        FilledButton.icon(
-                          onPressed: () =>
-                              _createReturn(context, ref, workOrder),
-                          icon: const Icon(Icons.replay_outlined),
-                          label: const Text('Criar retorno'),
-                        ),
-                      if (workOrder.status != WorkOrderStatus.done &&
-                          workOrder.status != WorkOrderStatus.cancelled)
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              _cancelWorkOrder(context, ref, workOrder),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor:
-                                Theme.of(context).colorScheme.error,
-                            side: BorderSide(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                          icon: const Icon(Icons.cancel_outlined),
-                          label: const Text('Cancelar OS'),
-                        ),
-                    ],
+                  _WorkOrderActions(
+                    workOrder: workOrder,
+                    items: itemsAsync.valueOrNull ?? const [],
+                    evidenceCount: evidenceAsync.valueOrNull?.length ?? 0,
+                    onTransition: (status) =>
+                        _transition(context, ref, status),
+                    onComplete: () => _completeWorkOrder(
+                      context,
+                      ref,
+                      workOrder,
+                      itemsAsync.valueOrNull ?? const [],
+                      evidenceAsync.valueOrNull?.length ?? 0,
+                    ),
+                    onTimeEntry: () => _openTimeEntryDialog(context, ref),
+                    onMaterial: () => _openMaterialDialog(context, ref),
+                    onExpense: () => _openExpenseDialog(context, ref),
+                    onEvidence: () =>
+                        _openEvidenceDialog(context, ref, workOrder),
+                    onAcceptance: () =>
+                        _openAcceptanceDialog(context, ref, workOrder),
+                    onReceivable: () => _createReceivable(context, ref),
+                    onSatisfaction: () =>
+                        _openSatisfactionDialog(context, ref, workOrder),
+                    onSendSurvey: () =>
+                        _sendSatisfactionSurvey(context, ref, workOrder),
+                    onReturn: () => _createReturn(context, ref, workOrder),
+                    onCancel: () => _cancelWorkOrder(context, ref, workOrder),
                   ),
                   if (workOrder.status == WorkOrderStatus.cancelled &&
                       workOrder.cancellationReason != null) ...[
@@ -712,7 +738,7 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                           contentPadding: EdgeInsets.zero,
                           title: Text(item.description),
                           subtitle: Text(
-                            '${item.kind} · Qtd ${item.quantity} · Unit. ${currency.format(item.unitPriceCents / 100)}',
+                            '${_itemKindLabel(item.kind)} · Qtd ${item.quantity} · Unit. ${currency.format(item.unitPriceCents / 100)}',
                           ),
                           trailing: Text(
                             currency.format(item.totalCents / 100),
@@ -769,6 +795,265 @@ class WorkOrderDetailScreen extends ConsumerWidget {
 Future<void> _noopStoredAttachmentAction(StoredAttachment attachment) async {}
 
 // ── Painel de histórico de eventos da OS ──────────────────────────────────────
+
+/// Barra de ações da OS.
+///
+/// Antes eram dez botões num `Wrap` plano, três deles com peso de ação
+/// principal ao mesmo tempo — inclusive "Gerar cobrança", numa OS que nem
+/// tinha começado. Aqui a barra deriva do status: uma ação principal, o que
+/// pertence à execução agrupado ao lado, e o resto no menu.
+///
+/// As ações que o banco recusaria (permissão ou status) não são renderizadas
+/// desabilitadas: elas somem. Botão morto permanente é ruído que o usuário
+/// aprende a ignorar.
+class _WorkOrderActions extends ConsumerWidget {
+  const _WorkOrderActions({
+    required this.workOrder,
+    required this.items,
+    required this.evidenceCount,
+    required this.onTransition,
+    required this.onComplete,
+    required this.onTimeEntry,
+    required this.onMaterial,
+    required this.onExpense,
+    required this.onEvidence,
+    required this.onAcceptance,
+    required this.onReceivable,
+    required this.onSatisfaction,
+    required this.onSendSurvey,
+    required this.onReturn,
+    required this.onCancel,
+  });
+
+  final WorkOrder workOrder;
+  final List<WorkOrderItem> items;
+  final int evidenceCount;
+  final void Function(WorkOrderStatus) onTransition;
+  final VoidCallback onComplete;
+  final VoidCallback onTimeEntry;
+  final VoidCallback onMaterial;
+  final VoidCallback onExpense;
+  final VoidCallback onEvidence;
+  final VoidCallback onAcceptance;
+  final VoidCallback onReceivable;
+  final VoidCallback onSatisfaction;
+  final VoidCallback onSendSurvey;
+  final VoidCallback onReturn;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = workOrder.status;
+    final canExecute = ref.watch(hasPermissionProvider('work_orders.execute')) ||
+        ref.watch(hasPermissionProvider('work_orders.manage'));
+    final canBill = ref.watch(hasPermissionProvider('financials.write'));
+
+    final primary = _primaryAction(status, canExecute, canBill);
+    final overflow = _overflowActions(status, canExecute, canBill);
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (primary != null)
+          FilledButton.icon(
+            onPressed: primary.onPressed,
+            icon: Icon(primary.icon),
+            label: Text(primary.label),
+          ),
+        if (status.acceptsExecutionInput && canExecute) ...[
+          OutlinedButton.icon(
+            onPressed: onTimeEntry,
+            icon: const Icon(Icons.timer_outlined),
+            label: const Text('Registrar horas'),
+          ),
+          OutlinedButton.icon(
+            onPressed: onMaterial,
+            icon: const Icon(Icons.inventory_2_outlined),
+            label: const Text('Adicionar material'),
+          ),
+          OutlinedButton.icon(
+            onPressed: onEvidence,
+            icon: const Icon(Icons.attach_file_outlined),
+            label: const Text('Anexar foto/evidência'),
+          ),
+        ],
+        if (overflow.isNotEmpty)
+          PopupMenuButton<VoidCallback>(
+            tooltip: 'Mais ações',
+            onSelected: (action) => action(),
+            itemBuilder: (context) => [
+              for (final action in overflow)
+                PopupMenuItem<VoidCallback>(
+                  value: action.onPressed,
+                  child: Row(
+                    children: [
+                      Icon(
+                        action.icon,
+                        size: 18,
+                        color: action.destructive
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        action.label,
+                        style: action.destructive
+                            ? TextStyle(
+                                color: Theme.of(context).colorScheme.error)
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            // Container em vez de OutlinedButton: um botão desabilitado dentro
+            // do PopupMenuButton disputaria o toque com ele. Mesma altura dos
+            // demais para o alvo continuar grande no celular.
+            child: Container(
+              height: 58,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.more_horiz, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Mais ações',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// A próxima coisa a fazer, conforme o status. Exatamente uma.
+  _WorkOrderAction? _primaryAction(
+    WorkOrderStatus status,
+    bool canExecute,
+    bool canBill,
+  ) {
+    if (status == WorkOrderStatus.done) {
+      if (!canBill) return null;
+      return _WorkOrderAction(
+        label: 'Gerar cobrança',
+        icon: Icons.account_balance_wallet_outlined,
+        onPressed: onReceivable,
+      );
+    }
+    if (!canExecute) return null;
+    if (status == WorkOrderStatus.inProgress) {
+      return _WorkOrderAction(
+        label: 'Concluir OS',
+        icon: Icons.check_circle_outline,
+        onPressed: onComplete,
+      );
+    }
+    if (status.canGoTo(WorkOrderStatus.inProgress)) {
+      return _WorkOrderAction(
+        label: status == WorkOrderStatus.paused
+            ? 'Retomar execução'
+            : 'Iniciar execução',
+        icon: Icons.play_arrow_outlined,
+        onPressed: () => onTransition(WorkOrderStatus.inProgress),
+      );
+    }
+    return null;
+  }
+
+  List<_WorkOrderAction> _overflowActions(
+    WorkOrderStatus status,
+    bool canExecute,
+    bool canBill,
+  ) {
+    final actions = <_WorkOrderAction>[];
+
+    if (status.acceptsExecutionInput && canExecute) {
+      actions.add(_WorkOrderAction(
+        label: 'Registrar despesa',
+        icon: Icons.receipt_long_outlined,
+        onPressed: onExpense,
+      ));
+    }
+    if (status == WorkOrderStatus.inProgress && canExecute) {
+      actions.add(_WorkOrderAction(
+        label: 'Pausar execução',
+        icon: Icons.pause_circle_outline,
+        onPressed: () => onTransition(WorkOrderStatus.paused),
+      ));
+      actions.add(_WorkOrderAction(
+        label: 'Aguardar cliente',
+        icon: Icons.hourglass_empty_outlined,
+        onPressed: () => onTransition(WorkOrderStatus.awaitingCustomer),
+      ));
+    }
+    // Aceite pertence ao fim do atendimento, não ao começo.
+    if (canExecute &&
+        (status == WorkOrderStatus.inProgress ||
+            status == WorkOrderStatus.awaitingCustomer ||
+            status == WorkOrderStatus.done)) {
+      actions.add(_WorkOrderAction(
+        label: 'Registrar aceite',
+        icon: Icons.verified_outlined,
+        onPressed: onAcceptance,
+      ));
+    }
+    if (status == WorkOrderStatus.done) {
+      actions.addAll([
+        _WorkOrderAction(
+          label: 'Enviar pesquisa de satisfação',
+          icon: Icons.poll_outlined,
+          onPressed: onSendSurvey,
+        ),
+        _WorkOrderAction(
+          label: 'Registrar satisfação',
+          icon: Icons.sentiment_satisfied_alt_outlined,
+          onPressed: onSatisfaction,
+        ),
+      ]);
+      if (canExecute) {
+        actions.add(_WorkOrderAction(
+          label: 'Criar retorno',
+          icon: Icons.replay_outlined,
+          onPressed: onReturn,
+        ));
+      }
+    }
+    if (!status.isTerminal && canExecute) {
+      actions.add(_WorkOrderAction(
+        label: 'Cancelar OS',
+        icon: Icons.cancel_outlined,
+        onPressed: onCancel,
+        destructive: true,
+      ));
+    }
+    return actions;
+  }
+}
+
+class _WorkOrderAction {
+  const _WorkOrderAction({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.destructive = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool destructive;
+}
 
 class _WorkOrderEventsPanel extends ConsumerWidget {
   const _WorkOrderEventsPanel({required this.workOrderId});

@@ -751,12 +751,22 @@ class WorkOrderRepository {
 
   AppError _mapError(PostgrestException e) {
     if (e.code == '42501' || e.code == 'insufficient_privilege') {
-      return const PermissionError(
-        'Voce nao tem permissao para acessar ordens de servico.',
+      // A mensagem do banco ja diz qual acao foi negada ("Permissao
+      // insuficiente para executar OS.", "...para criar recebivel."). Dizer
+      // "nao pode acessar" era errado: o usuario esta olhando a OS.
+      return PermissionError(
+        e.message.isNotEmpty
+            ? e.message
+            : 'Voce nao tem permissao para esta acao na OS.',
       );
     }
     if (e.code == '23514' || e.code == 'P0001') {
-      return const BusinessRuleError('Revise os dados da OS.');
+      // "Revise os dados da OS." jogava fora o motivo real, que o banco ja
+      // escreve em portugues e voltado ao usuario: "OS finalizada nao pode
+      // mudar de status.", "So e possivel gerar cobranca de OS concluida."
+      return BusinessRuleError(
+        e.message.isNotEmpty ? e.message : 'Revise os dados da OS.',
+      );
     }
     return UnexpectedError(
       'Operacao de OS falhou. Tente novamente.',

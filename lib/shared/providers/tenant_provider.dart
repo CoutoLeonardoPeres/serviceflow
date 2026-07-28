@@ -158,3 +158,36 @@ final hasTenantProvider = Provider.autoDispose<bool>((ref) {
   final membership = ref.watch(activeMembershipProvider);
   return membership.whenOrNull(data: (m) => m != null) ?? false;
 });
+
+/// Permissões do papel do usuário no tenant ativo, lidas do banco pela RPC
+/// `my_permissions()` (migration 0057).
+///
+/// A alternativa seria duplicar a matriz de permissões no Dart — e ela sairia
+/// do ar no dia em que alguém mexesse em `role_permissions`. Aqui a fonte da
+/// verdade continua sendo o banco.
+final currentPermissionsProvider =
+    FutureProvider<Set<String>>((ref) async {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return <String>{};
+
+  final client = ref.watch(supabaseClientProvider);
+  final result = await client.rpc('my_permissions');
+  return (result as List<dynamic>? ?? const [])
+      .map((e) => e.toString())
+      .toSet();
+});
+
+/// `true` quando o usuário tem a permissão.
+///
+/// Falha aberto de propósito: enquanto carrega, ou se a RPC não existir (banco
+/// sem a migration 0057), devolve `true`. Quem impede de fato é o banco — esta
+/// checagem só evita oferecer o que seria recusado. Falhar fechado deixaria a
+/// tela sem nenhuma ação num banco desatualizado, que é um estrago maior do
+/// que mostrar um botão a mais.
+final hasPermissionProvider =
+    Provider.autoDispose.family<bool, String>((ref, permission) {
+  return ref.watch(currentPermissionsProvider).maybeWhen(
+        data: (permissions) => permissions.contains(permission),
+        orElse: () => true,
+      );
+});

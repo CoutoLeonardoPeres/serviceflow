@@ -41,6 +41,54 @@ enum WorkOrderStatus {
         'cancelled' => WorkOrderStatus.cancelled,
         _ => throw ArgumentError('WorkOrderStatus desconhecido: $value'),
       };
+
+  /// OS encerrada: não muda mais de status.
+  bool get isTerminal =>
+      this == WorkOrderStatus.done || this == WorkOrderStatus.cancelled;
+
+  /// Espelha `_sf_work_order_can_transition` da migration 0057. Quem decide é
+  /// o banco; isto existe para a tela não oferecer o que será recusado.
+  /// Mudou lá, muda aqui — e o teste em
+  /// `test/work_orders/work_order_status_test.dart` falha se divergir.
+  Set<WorkOrderStatus> get allowedNext => switch (this) {
+        WorkOrderStatus.draft => {
+            WorkOrderStatus.opened,
+            WorkOrderStatus.cancelled,
+          },
+        WorkOrderStatus.opened => {
+            WorkOrderStatus.scheduled,
+            WorkOrderStatus.inProgress,
+            WorkOrderStatus.cancelled,
+          },
+        WorkOrderStatus.scheduled => {
+            WorkOrderStatus.opened,
+            WorkOrderStatus.inProgress,
+            WorkOrderStatus.cancelled,
+          },
+        WorkOrderStatus.inProgress => {
+            WorkOrderStatus.paused,
+            WorkOrderStatus.awaitingCustomer,
+            WorkOrderStatus.done,
+            WorkOrderStatus.cancelled,
+          },
+        WorkOrderStatus.awaitingCustomer => {
+            WorkOrderStatus.inProgress,
+            WorkOrderStatus.done,
+            WorkOrderStatus.cancelled,
+          },
+        WorkOrderStatus.paused => {
+            WorkOrderStatus.inProgress,
+            WorkOrderStatus.awaitingCustomer,
+            WorkOrderStatus.cancelled,
+          },
+        WorkOrderStatus.done => const {},
+        WorkOrderStatus.cancelled => const {},
+      };
+
+  bool canGoTo(WorkOrderStatus next) => allowedNext.contains(next);
+
+  /// A execução ainda pode receber horas, materiais, despesas e evidências.
+  bool get acceptsExecutionInput => !isTerminal;
 }
 
 enum WorkOrderItemKind {

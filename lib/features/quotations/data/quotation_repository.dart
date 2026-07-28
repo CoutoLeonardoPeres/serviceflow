@@ -337,6 +337,28 @@ class QuotationRepository {
 
   /// Registra a resposta do cliente pelo próprio sistema — quando ele
   /// respondeu por telefone, WhatsApp ou pessoalmente, sem usar o link.
+  /// Reabre orçamento recusado ou expirado dentro da janela de 30 dias
+  /// (migration 0058). Devolve o chamado junto.
+  Future<void> reopen({
+    required String quotationId,
+    String? reason,
+  }) async {
+    try {
+      await _db.rpc(
+        'reopen_quotation',
+        params: {
+          'p_quotation_id': quotationId,
+          'p_reason':
+              (reason == null || reason.trim().isEmpty) ? null : reason.trim(),
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao reabrir o orcamento.', e.toString());
+    }
+  }
+
   Future<void> decideInternal({
     required String quotationId,
     required QuotationPublicDecision decision,
@@ -539,13 +561,20 @@ class QuotationRepository {
   }
 
   AppError _mapError(PostgrestException e) {
+    // Mesma correcao aplicada em work_order_repository: a mensagem do banco ja
+    // e especifica e em portugues; substitui-la por um texto generico apaga a
+    // unica informacao util que o usuario tinha.
     if (e.code == '42501' || e.code == 'insufficient_privilege') {
-      return const PermissionError(
-        'Voce nao tem permissao para acessar orcamentos.',
+      return PermissionError(
+        e.message.isNotEmpty
+            ? e.message
+            : 'Voce nao tem permissao para esta acao no orcamento.',
       );
     }
     if (e.code == '23514' || e.code == 'P0001') {
-      return const BusinessRuleError('Revise os itens do orcamento.');
+      return BusinessRuleError(
+        e.message.isNotEmpty ? e.message : 'Revise os itens do orcamento.',
+      );
     }
     return UnexpectedError(
       'Operacao de orcamento falhou. Tente novamente.',

@@ -21,9 +21,24 @@ import '../../communications/presentation/send_message_panel.dart';
 import '../../customers/application/customer_list_notifier.dart';
 import '../application/quotation_list_notifier.dart';
 import '../domain/quotation.dart';
+import '../domain/quotation_version.dart';
 import '../pdf/quotation_pdf_generator.dart';
 import 'widgets/quotation_status_chip.dart';
 import '../../work_orders/application/work_order_list_notifier.dart';
+
+/// Espelha `quotation_reopen_deadline` (0058): 30 dias a partir do registro
+/// mais recente do status atual. Quem decide de fato e o banco — isto so evita
+/// mostrar um botao que ja seria recusado.
+DateTime? quotationReopenDeadline(Quotation quote, List<QuotationStatusEvent> events) {
+  DateTime? latest;
+  for (final event in events) {
+    if (event.status != quote.status.value) continue;
+    if (latest == null || event.changedAt.isAfter(latest)) {
+      latest = event.changedAt;
+    }
+  }
+  return (latest ?? quote.updatedAt).add(const Duration(days: 30));
+}
 
 class QuotationDetailScreen extends ConsumerWidget {
   const QuotationDetailScreen({super.key, required this.quotationId});
@@ -85,6 +100,56 @@ class QuotationDetailScreen extends ConsumerWidget {
 
   /// Registra a resposta do cliente pelo sistema. Serve para o caso comum de
   /// ele responder por telefone ou pessoalmente, sem abrir o link.
+  /// Reabre orçamento recusado ou expirado. A janela de 30 dias é validada no
+  /// banco (0058); aqui só evitamos oferecer o botão fora dela.
+  Future<void> _reopen(
+    BuildContext context,
+    WidgetRef ref,
+    Quotation quote,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reabrir orçamento'),
+        content: const Text(
+          'O orçamento volta para "Enviado" e o chamado de origem é reaberto '
+          'junto. Os valores continuam os mesmos da proposta recusada — se os '
+          'preços mudaram, crie um orçamento novo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Reabrir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(quotationRepositoryProvider).reopen(quotationId: quote.id);
+      ref.invalidate(quotationDetailProvider(quote.id));
+      ref.invalidate(quotationStatusHistoryProvider(quote.id));
+      ref.invalidate(quotationListProvider);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Orçamento e chamado reabertos.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is AppError ? e.userMessage : 'Não foi possível reabrir.',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _decideInternally(
     BuildContext context,
     WidgetRef ref,
@@ -435,76 +500,103 @@ class QuotationDetailScreen extends ConsumerWidget {
                       Text(quote.notes!),
                     ],
                     const SizedBox(height: 24),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: () => _generatePdf(context, ref, quote),
-                          icon: const Icon(Icons.picture_as_pdf_outlined),
-                          label: const Text('Gerar PDF'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => _copyPublicLink(context, ref, quote),
-                          icon: const Icon(Icons.link),
-                          label: const Text('Copiar link público'),
-                        ),
-                        // Aprovação registrada pelo operador: o cliente
-                        // costuma responder por telefone, não pelo link.
+                    Consumer(builder: (context, ref, _) {
+                      final tenant = ref.watch(currentTenantProvider);
+                      final customerAsync =
+                          ref.watch(customerDetailProvider(quote.customerId));
+                      final customer = customerAsync.valueOrNull;
+                      final phone = customer?.phone ?? '';
+                      final companyName = tenant?['name'] as String? ?? '';
+
+                      // Mesma correcao da tela de OS: uma acao principal
+                      // conforme o status, secundarias ao lado, resto no menu.
+                      // Antes eram tres FilledButton competindo entre si.
+                      final overflow = <(String, IconData, VoidCallback, bool)>[
                         if (!quote.status.isTerminal) ...[
-                          FilledButton.icon(
-                            onPressed: () => _decideInternally(
-                              context,
-                              ref,
-                              quote,
-                              QuotationPublicDecision.approved,
-                            ),
-                            icon: const Icon(Icons.verified_outlined),
-                            label: const Text('Aprovar orçamento'),
+                          (
+                            'Aprovar orçamento',
+                            Icons.verified_outlined,
+                            () => _decideInternally(context, ref, quote,
+                                QuotationPublicDecision.approved),
+                            false,
                           ),
-                          OutlinedButton.icon(
-                            onPressed: () => _decideInternally(
-                              context,
-                              ref,
-                              quote,
-                              QuotationPublicDecision.rejected,
-                            ),
-                            icon: const Icon(Icons.thumb_down_outlined),
-                            label: const Text('Registrar recusa'),
+                          (
+                            'Registrar recusa',
+                            Icons.thumb_down_outlined,
+                            () => _decideInternally(context, ref, quote,
+                                QuotationPublicDecision.rejected),
+                            false,
                           ),
-                          Consumer(builder: (context, ref, _) {
-                            final tenant = ref.watch(currentTenantProvider);
-                            final customerAsync = ref.watch(
-                                customerDetailProvider(quote.customerId));
-                            return customerAsync.maybeWhen(
-                              data: (c) => FilledButton.tonalIcon(
-                                onPressed: () => _sendApprovalWhatsApp(
-                                  context,
-                                  ref,
-                                  quote,
-                                  c.phone ?? '',
-                                  tenant?['name'] as String? ?? '',
-                                ),
-                                icon: const Icon(Icons.chat_outlined),
-                                label: const Text('Aprovar por WhatsApp'),
-                              ),
-                              orElse: () => const SizedBox.shrink(),
-                            );
-                          }),
                         ],
-                        Consumer(builder: (context, ref, _) {
-                          final tenant = ref.watch(currentTenantProvider);
-                          final customerAsync = ref.watch(
-                              customerDetailProvider(quote.customerId));
-                          return customerAsync.maybeWhen(
-                            data: (c) => SendMessageButton(
+                        (
+                          'Copiar link público',
+                          Icons.link,
+                          () => _copyPublicLink(context, ref, quote),
+                          false,
+                        ),
+                        (
+                          'Revogar link público',
+                          Icons.link_off_outlined,
+                          () => _revokePublicLinks(context, ref, quote),
+                          false,
+                        ),
+                        if (!quote.status.isTerminal)
+                          (
+                            'Cancelar orçamento',
+                            Icons.cancel_outlined,
+                            () => _cancelQuotation(context, ref, quote),
+                            true,
+                          ),
+                      ];
+
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (quote.status == QuotationStatus.approved)
+                            FilledButton.icon(
+                              onPressed: () =>
+                                  _convertToWorkOrder(context, ref, quote),
+                              icon: const Icon(Icons.engineering_outlined),
+                              label: const Text('Abrir OS'),
+                            )
+                          else if (!quote.status.isTerminal &&
+                              phone.isNotEmpty)
+                            FilledButton.icon(
+                              onPressed: () => _sendApprovalWhatsApp(
+                                context,
+                                ref,
+                                quote,
+                                phone,
+                                companyName,
+                              ),
+                              icon: const Icon(Icons.chat_outlined),
+                              label: const Text('Enviar para aprovação'),
+                            )
+                          else
+                            FilledButton.icon(
+                              onPressed: () =>
+                                  _generatePdf(context, ref, quote),
+                              icon: const Icon(Icons.picture_as_pdf_outlined),
+                              label: const Text('Gerar PDF'),
+                            ),
+                          if (quote.status == QuotationStatus.approved ||
+                              (!quote.status.isTerminal && phone.isNotEmpty))
+                            OutlinedButton.icon(
+                              onPressed: () =>
+                                  _generatePdf(context, ref, quote),
+                              icon: const Icon(Icons.picture_as_pdf_outlined),
+                              label: const Text('Gerar PDF'),
+                            ),
+                          if (customer != null)
+                            SendMessageButton(
                               messageContext: MessageContext(
-                                customerId: c.id,
-                                customerName: c.name,
-                                customerPhone: c.phone ?? '',
-                                customerEmail: c.email ?? '',
-                                companyName:
-                                    tenant?['name'] as String? ?? '',
+                                customerId: customer.id,
+                                customerName: customer.name,
+                                customerPhone: phone,
+                                customerEmail: customer.email ?? '',
+                                companyName: companyName,
                                 quotationNumber: quote.number.toString(),
                                 amount: (quote.totalCents / 100)
                                     .toStringAsFixed(2)
@@ -513,38 +605,116 @@ class QuotationDetailScreen extends ConsumerWidget {
                                 relatedEntityId: quote.id,
                               ),
                             ),
-                            orElse: () => const SizedBox.shrink(),
-                          );
-                        }),
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              _revokePublicLinks(context, ref, quote),
-                          icon: const Icon(Icons.link_off_outlined),
-                          label: const Text('Revogar link público'),
-                        ),
-                        if (quote.status == QuotationStatus.approved)
-                          FilledButton.icon(
-                            onPressed: () =>
-                                _convertToWorkOrder(context, ref, quote),
-                            icon: const Icon(Icons.engineering_outlined),
-                            label: const Text('Gerar OS'),
-                          ),
-                        if (!quote.status.isTerminal)
-                          OutlinedButton.icon(
-                            onPressed: () =>
-                                _cancelQuotation(context, ref, quote),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor:
-                                  Theme.of(context).colorScheme.error,
-                              side: BorderSide(
-                                color: Theme.of(context).colorScheme.error,
+                          PopupMenuButton<VoidCallback>(
+                            tooltip: 'Mais ações',
+                            onSelected: (action) => action(),
+                            itemBuilder: (context) => [
+                              for (final (label, icon, action, destructive)
+                                  in overflow)
+                                PopupMenuItem<VoidCallback>(
+                                  value: action,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        icon,
+                                        size: 18,
+                                        color: destructive
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .error
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        label,
+                                        style: destructive
+                                            ? TextStyle(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .error)
+                                            : null,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                            child: Container(
+                              height: 58,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.more_horiz, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Mais ações',
+                                    style:
+                                        Theme.of(context).textTheme.labelLarge,
+                                  ),
+                                ],
                               ),
                             ),
-                            icon: const Icon(Icons.cancel_outlined),
-                            label: const Text('Cancelar orçamento'),
                           ),
-                      ],
-                    ),
+                        ],
+                      );
+                    }),
+                    if (quote.status == QuotationStatus.rejected ||
+                        quote.status == QuotationStatus.expired)
+                      Consumer(builder: (context, ref, _) {
+                        final historyAsync = ref
+                            .watch(quotationStatusHistoryProvider(quote.id));
+                        final deadline = historyAsync.maybeWhen(
+                          data: (events) =>
+                              quotationReopenDeadline(quote, events),
+                          orElse: () => null,
+                        );
+                        if (deadline == null) return const SizedBox.shrink();
+
+                        final remaining =
+                            deadline.difference(DateTime.now()).inDays;
+                        if (remaining < 0) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Text(
+                              'Prazo de reabertura encerrado em '
+                              '${DateFormat('dd/MM/yyyy').format(deadline)}. '
+                              'Para retomar, crie um orçamento novo.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          );
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: () => _reopen(context, ref, quote),
+                                icon: const Icon(Icons.restart_alt),
+                                label: const Text('Reabrir orçamento'),
+                              ),
+                              Text(
+                                remaining == 0
+                                    ? 'Último dia do prazo de reabertura.'
+                                    : 'Pode ser reaberto por mais $remaining '
+                                        'dia(s), até '
+                                        '${DateFormat('dd/MM/yyyy').format(deadline)}.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                     if (quote.status == QuotationStatus.cancelled &&
                         quote.cancellationReason != null) ...[
                       const SizedBox(height: 16),

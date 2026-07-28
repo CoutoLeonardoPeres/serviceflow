@@ -62,13 +62,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // A barra deriva do status (0057). Em execução: uma ação primária
+    // (Concluir OS) e as ações de campo ao lado.
+    expect(find.text('Concluir OS'), findsOneWidget);
     expect(find.text('Registrar horas'), findsOneWidget);
     expect(find.text('Adicionar material'), findsOneWidget);
-    expect(find.text('Registrar despesa'), findsOneWidget);
     expect(find.text('Anexar foto/evidência'), findsOneWidget);
+    expect(find.text('Mais ações'), findsOneWidget);
+
+    // Cobrança e satisfação pertencem à OS concluída — não aparecem aqui nem
+    // desabilitadas. Era o defeito P0: "Gerar cobrança" sólido numa OS que
+    // ainda não terminou.
+    expect(find.text('Gerar cobrança'), findsNothing);
+    expect(find.text('Registrar satisfação'), findsNothing);
+
+    // Despesa e aceite existem, mas no menu.
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
+    expect(find.text('Registrar despesa'), findsOneWidget);
     expect(find.text('Registrar aceite'), findsOneWidget);
-    expect(find.text('Gerar cobrança'), findsOneWidget);
-    expect(find.text('Registrar satisfação'), findsOneWidget);
+    expect(find.text('Cancelar OS'), findsOneWidget);
   });
 
   testWidgets('WorkOrderDetailScreen abre popup de horas', (tester) async {
@@ -170,6 +183,8 @@ void main() {
     );
     await tester.pump();
 
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Registrar aceite'));
     await tester.pumpAndSettle();
 
@@ -280,6 +295,8 @@ void main() {
     );
     await tester.pump();
 
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Registrar despesa'));
     await tester.pumpAndSettle();
 
@@ -334,6 +351,8 @@ void main() {
     );
     await tester.pump();
 
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Registrar satisfação'));
     await tester.pumpAndSettle();
 
@@ -390,6 +409,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Mais ações'));
+    await tester.pumpAndSettle();
     expect(find.text('Criar retorno'), findsOneWidget);
   });
 
