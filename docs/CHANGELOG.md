@@ -1,5 +1,46 @@
 # Changelog
 
+## [F5-P2 — Mais de um profissional no mesmo atendimento] — 2026-07-27
+
+Serviço que exige dupla (troca de compressor, quadro trifásico) já cabia no
+schema — `appointment_assignments` é 1:N desde a 0004 — mas não havia porta
+de entrada: `schedule_appointment` insere exatamente um técnico e nada
+permitia acrescentar outro depois.
+
+### Adicionado
+
+- **`assign_technician` / `unassign_technician`**
+  (`0052_appointment_multi_technician.sql`). Acrescentar é idempotente e
+  aceita profissional de **outra categoria** (um serviço pode pedir
+  eletricista mais ajudante); remover é soft, via `revoked_at`, preservando
+  quem esteve no atendimento. Ambas validam conflito de horário com a mesma
+  regra do agendamento e registram `technician_added`/`technician_removed`
+  em `appointment_events`.
+- **Painel do atendimento**: clicar num horário ocupado abre a lista de
+  profissionais, o seletor para adicionar outro e o cancelamento com motivo
+  — antes o clique ia direto para o diálogo de cancelar.
+- `Appointment.technicians` expõe todos os atribuídos; `technicianUserId` e
+  `technicianName` seguem apontando para o primeiro, para quem só precisa de
+  um.
+- `test/isolation/0025_appointment_multi_technician_test.sql` — 8 casos,
+  incluindo o de reatribuir quem já saiu (a constraint única é por
+  `(appointment_id, technician_user_id)` sem filtro de `revoked_at`, então
+  voltar é UPDATE, não INSERT).
+
+### Corrigido
+
+- `AppointmentRepository._mapError` traduzia **toda** violação de regra como
+  "Este técnico já possui atendimento neste período". Com as regras novas
+  ("precisa de ao menos um profissional", "atendimento encerrado não aceita
+  profissional") a mensagem passaria a mentir na maioria dos casos — agora
+  propaga o texto que a própria RPC levanta.
+
+### Regra de negócio
+
+- O último profissional não pode ser removido: atendimento sem responsável
+  ficaria ocupando o horário sem devolver o item para a fila. Para esvaziar,
+  cancele o atendimento.
+
 ## [F5-P1 — Agenda por fila de categoria com arrastar para agendar] — 2026-07-27
 
 A agenda deixa de ser um calendário passivo e passa a operar por fila

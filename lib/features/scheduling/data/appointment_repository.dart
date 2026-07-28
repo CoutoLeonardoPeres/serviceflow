@@ -41,7 +41,7 @@ class AppointmentRepository {
   }) async {
     try {
       var query = _db.from(_table).select(
-            '*, customers(name), service_requests(title), appointment_assignments!inner(technician_user_id, profiles(full_name, phone))',
+            '*, customers(name), service_requests(title), appointment_assignments!inner(technician_user_id, revoked_at, profiles(full_name, phone))',
           );
 
       if (filter.status != null) {
@@ -83,7 +83,7 @@ class AppointmentRepository {
       final row = await _db
           .from(_table)
           .select(
-            '*, customers(name), service_requests(title), appointment_assignments(technician_user_id, profiles(full_name, phone))',
+            '*, customers(name), service_requests(title), appointment_assignments(technician_user_id, revoked_at, profiles(full_name, phone))',
           )
           .eq('id', id)
           .single();
@@ -136,6 +136,48 @@ class AppointmentRepository {
       throw _mapError(e);
     } catch (e) {
       throw UnexpectedError('Erro ao cancelar atendimento.', e.toString());
+    }
+  }
+
+  /// Acrescenta um profissional ao atendimento. Pode ser de outra categoria —
+  /// um serviço pode exigir eletricista mais ajudante. Idempotente.
+  Future<void> assignTechnician({
+    required String appointmentId,
+    required String technicianUserId,
+  }) async {
+    try {
+      await _db.rpc(
+        'assign_technician',
+        params: {
+          'p_appointment_id': appointmentId,
+          'p_technician_user_id': technicianUserId,
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao atribuir profissional.', e.toString());
+    }
+  }
+
+  /// Remove um profissional. O banco recusa remover o último — para esvaziar
+  /// o horário use [cancel], que devolve o item para a fila.
+  Future<void> unassignTechnician({
+    required String appointmentId,
+    required String technicianUserId,
+  }) async {
+    try {
+      await _db.rpc(
+        'unassign_technician',
+        params: {
+          'p_appointment_id': appointmentId,
+          'p_technician_user_id': technicianUserId,
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao remover profissional.', e.toString());
     }
   }
 
@@ -214,8 +256,15 @@ class AppointmentRepository {
       return const PermissionError('Voce nao tem permissao para esta agenda.');
     }
     if (e.code == '23P01' || e.code == '23514' || e.code == 'P0001') {
-      return const BusinessRuleError(
-        'Este tecnico ja possui atendimento neste periodo.',
+      // As RPCs de agenda levantam check_violation com mensagem pronta para o
+      // usuário ("já possui atendimento neste período", "precisa de ao menos
+      // um profissional", "atendimento encerrado"). Fixar um texto só aqui
+      // fazia toda regra virar "técnico ocupado", que quase sempre mentia.
+      final message = e.message.trim();
+      return BusinessRuleError(
+        message.isEmpty
+            ? 'Não foi possível concluir a operação na agenda.'
+            : message,
       );
     }
     return UnexpectedError(

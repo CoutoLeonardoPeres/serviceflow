@@ -77,6 +77,7 @@ class Appointment {
     this.serviceRequestTitle,
     this.technicianUserId,
     this.technicianName,
+    this.technicians = const [],
   }) {
     if (!scheduledEnd.isAfter(scheduledStart)) {
       throw ArgumentError('Agendamento deve ter termino apos o inicio.');
@@ -99,8 +100,12 @@ class Appointment {
   final String? updatedBy;
   final String? customerName;
   final String? serviceRequestTitle;
+  /// Primeiro atribuído — usado onde a UI precisa de um só profissional.
   final String? technicianUserId;
   final String? technicianName;
+
+  /// Todos os profissionais ativos no atendimento, em ordem de atribuição.
+  final List<AppointmentTechnician> technicians;
 
   Duration get duration => scheduledEnd.difference(scheduledStart);
 
@@ -116,10 +121,34 @@ class Appointment {
       };
 }
 
+class AppointmentTechnician {
+  const AppointmentTechnician({required this.userId, this.name});
+
+  final String userId;
+  final String? name;
+
+  String get label => name ?? 'Profissional';
+}
+
 Appointment appointmentFromRow(Map<String, dynamic> row) {
   final customer = row['customers'];
   final serviceRequest = row['service_requests'];
   final assignments = row['appointment_assignments'];
+
+  final technicians = <AppointmentTechnician>[
+    if (assignments is List)
+      for (final entry in assignments)
+        if (entry is Map &&
+            entry['revoked_at'] == null &&
+            entry['technician_user_id'] is String)
+          AppointmentTechnician(
+            userId: entry['technician_user_id'] as String,
+            name: entry['profiles'] is Map
+                ? (entry['profiles'] as Map)['full_name'] as String?
+                : null,
+          ),
+  ];
+
   final assignment = assignments is List && assignments.isNotEmpty
       ? assignments.first as Map<String, dynamic>
       : null;
@@ -145,9 +174,14 @@ Appointment appointmentFromRow(Map<String, dynamic> row) {
     serviceRequestTitle: serviceRequest is Map<String, dynamic>
         ? serviceRequest['title'] as String?
         : null,
-    technicianUserId: assignment?['technician_user_id'] as String?,
-    technicianName: profile is Map<String, dynamic>
-        ? profile['full_name'] as String?
-        : null,
+    technicianUserId: technicians.isNotEmpty
+        ? technicians.first.userId
+        : assignment?['technician_user_id'] as String?,
+    technicianName: technicians.isNotEmpty
+        ? technicians.first.name
+        : profile is Map<String, dynamic>
+            ? profile['full_name'] as String?
+            : null,
+    technicians: technicians,
   );
 }

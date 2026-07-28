@@ -1001,6 +1001,7 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                                                 selectedTechnician,
                                             visibleTechnicians:
                                                 visibleTechnicians,
+                                            allTechnicians: technicians,
                                           ),
                                         ),
                                 ),
@@ -1025,6 +1026,7 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
     required List<DateTime> slots,
     required Technician? selectedTechnician,
     required List<Technician> visibleTechnicians,
+    required List<Technician> allTechnicians,
   }) {
     final groups = <String, List<DateTime>>{
       'Manhã': slots.where((slot) => slot.hour < 12).toList(),
@@ -1091,13 +1093,17 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
                                   visibleTechnicians: visibleTechnicians,
                                   appointments: _allAppointments,
                                 ),
-                                onCancel: () => _cancelSlotAppointment(
+                                onCancel: () => _openAppointmentPanel(
                                   _appointmentForSlot(
                                     slot: slot,
                                     selectedTechnician: selectedTechnician,
                                     visibleTechnicians: visibleTechnicians,
                                     appointments: _allAppointments,
                                   ),
+                                  // Lista completa, não a filtrada pela
+                                  // categoria: um serviço pode precisar de
+                                  // eletricista mais ajudante.
+                                  allTechnicians,
                                 ),
                                 onTap: () async {
                                 final action = await showDialog<_SlotAction>(
@@ -1199,22 +1205,26 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
     }
   }
 
-  /// Cancela o atendimento do slot. O item volta para a fila de todos os
-  /// profissionais da categoria, e o motivo fica no histórico para relatório.
-  Future<void> _cancelSlotAppointment(Appointment? appointment) async {
+  /// Abre o painel do atendimento: profissionais atribuídos, adicionar outro
+  /// (mesma ou outra categoria) e cancelar devolvendo o item para a fila.
+  Future<void> _openAppointmentPanel(
+    Appointment? appointment,
+    List<Technician> technicians,
+  ) async {
     if (appointment == null) return;
 
-    final reason = await showDialog<String>(
+    final result = await showAppFormDialog<_AppointmentPanelResult>(
       context: context,
-      builder: (_) => _CancelAppointmentDialog(appointment: appointment),
+      title: 'Atendimento agendado',
+      maxWidth: 640,
+      child: _AppointmentPanel(
+        appointment: appointment,
+        technicians: technicians,
+      ),
     );
-    if (reason == null) return;
+    if (result == null) return;
 
-    try {
-      await ref.read(appointmentRepositoryProvider).cancel(
-            appointmentId: appointment.id,
-            reason: reason,
-          );
+    if (result.cancelled) {
       ref.invalidate(_scheduledReferenceKeysProvider);
       ref.read(appointmentListProvider.notifier).refresh();
       if (!mounted) return;
@@ -1223,10 +1233,12 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
         _cancelledHere.add(appointment.id);
       });
       _showDropMessage('Atendimento cancelado e devolvido para a fila.');
-    } catch (e) {
-      _showDropMessage(
-        e is AppError ? e.userMessage : 'Não foi possível cancelar.',
-      );
+      return;
+    }
+
+    if (result.changed) {
+      ref.read(appointmentListProvider.notifier).refresh();
+      if (mounted) setState(() {});
     }
   }
 
@@ -1237,68 +1249,268 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
   }
 }
 
-class _CancelAppointmentDialog extends StatefulWidget {
-  const _CancelAppointmentDialog({required this.appointment});
+class _AppointmentPanelResult {
+  const _AppointmentPanelResult({
+    this.cancelled = false,
+    this.changed = false,
+  });
 
-  final Appointment appointment;
-
-  @override
-  State<_CancelAppointmentDialog> createState() =>
-      _CancelAppointmentDialogState();
+  final bool cancelled;
+  final bool changed;
 }
 
-class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
-  final _reasonController = TextEditingController();
+/// Painel do atendimento agendado: quem está nele, adicionar profissional
+/// (de qualquer categoria) e cancelar devolvendo o item para a fila.
+class _AppointmentPanel extends ConsumerStatefulWidget {
+  const _AppointmentPanel({
+    required this.appointment,
+    required this.technicians,
+  });
+
+  final Appointment appointment;
+  final List<Technician> technicians;
 
   @override
-  void dispose() {
-    _reasonController.dispose();
-    super.dispose();
+  ConsumerState<_AppointmentPanel> createState() => _AppointmentPanelState();
+}
+
+class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
+  late List<AppointmentTechnician> _assigned;
+  bool _busy = false;
+  bool _changed = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _assigned = [...widget.appointment.technicians];
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await action();
+      final updated = await ref
+          .read(appointmentRepositoryProvider)
+          .get(widget.appointment.id);
+      if (!mounted) return;
+      setState(() {
+        _assigned = [...updated.technicians];
+        _changed = true;
+        _busy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e is AppError ? e.userMessage : 'Operação não concluída.';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final time = DateFormat('HH:mm', 'pt_BR')
-        .format(widget.appointment.scheduledStart);
-    return AlertDialog(
-      title: const Text('Cancelar atendimento'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${widget.appointment.customerName ?? 'Cliente'} · $time',
-            style: Theme.of(context).textTheme.bodyMedium,
+    final appointment = widget.appointment;
+    final textTheme = Theme.of(context).textTheme;
+    final period =
+        '${DateFormat('HH:mm', 'pt_BR').format(appointment.scheduledStart)}'
+        ' às '
+        '${DateFormat('HH:mm', 'pt_BR').format(appointment.scheduledEnd)}';
+
+    final assignedIds = _assigned.map((t) => t.userId).toSet();
+    final available = widget.technicians
+        .where(
+          (technician) =>
+              technician.userId != null &&
+              !assignedIds.contains(technician.userId),
+        )
+        .toList();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          appointment.customerName ?? 'Cliente não informado',
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        Text(
+          '${appointment.kind.label} · $period',
+          style: textTheme.bodySmall,
+        ),
+        if (appointment.serviceRequestTitle != null)
+          Text(appointment.serviceRequestTitle!, style: textTheme.bodySmall),
+        const SizedBox(height: 18),
+
+        Text(
+          'Profissionais neste atendimento',
+          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        if (_assigned.isEmpty)
+          Text('Nenhum profissional atribuído.', style: textTheme.bodySmall)
+        else
+          ..._assigned.map(
+            (technician) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: const Icon(Icons.person_outline),
+              title: Text(technician.label),
+              trailing: _assigned.length > 1
+                  ? IconButton(
+                      tooltip: 'Remover do atendimento',
+                      icon: const Icon(Icons.close),
+                      onPressed: _busy
+                          ? null
+                          : () => _run(
+                                () => ref
+                                    .read(appointmentRepositoryProvider)
+                                    .unassignTechnician(
+                                      appointmentId: appointment.id,
+                                      technicianUserId: technician.userId,
+                                    ),
+                              ),
+                    )
+                  // O último não sai: atendimento sem responsável ficaria
+                  // ocupando o horário sem voltar para a fila. Para esvaziar,
+                  // cancele.
+                  : null,
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'O item volta para a fila de todos os profissionais da categoria.',
-            style: Theme.of(context).textTheme.bodySmall,
+
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          isExpanded: true,
+          initialValue: null,
+          decoration: const InputDecoration(
+            labelText: 'Adicionar profissional',
+            helperText: 'Pode ser de outra categoria.',
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _reasonController,
-            autofocus: true,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Motivo',
-              hintText: 'Ex.: cliente remarcou',
+          items: available
+              .map(
+                (technician) => DropdownMenuItem(
+                  value: technician.userId,
+                  child: Text(
+                    '${technician.name} · ${technician.category}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: _busy || available.isEmpty
+              ? null
+              : (value) {
+                  if (value == null) return;
+                  _run(
+                    () => ref
+                        .read(appointmentRepositoryProvider)
+                        .assignTechnician(
+                          appointmentId: appointment.id,
+                          technicianUserId: value,
+                        ),
+                  );
+                },
+        ),
+
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            _error!,
+            style: textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.error,
             ),
           ),
         ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Voltar'),
+        if (_busy) ...[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ],
+
+        const SizedBox(height: 20),
+        const Divider(),
+        const SizedBox(height: 8),
+        Text(
+          'Cancelar devolve o chamado ou a OS para a fila de todos os '
+          'profissionais da categoria.',
+          style: textTheme.bodySmall,
         ),
-        FilledButton(
-          onPressed: () =>
-              Navigator.of(context).pop(_reasonController.text.trim()),
-          child: const Text('Cancelar atendimento'),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            TextButton(
+              onPressed: _busy
+                  ? null
+                  : () => Navigator.of(context).pop(
+                        _AppointmentPanelResult(changed: _changed),
+                      ),
+              child: const Text('Fechar'),
+            ),
+            const Spacer(),
+            FilledButton.tonalIcon(
+              onPressed: _busy ? null : _confirmCancel,
+              icon: const Icon(Icons.event_busy_outlined),
+              label: const Text('Cancelar atendimento'),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  Future<void> _confirmCancel() async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancelar atendimento'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: 'Motivo',
+            hintText: 'Ex.: cliente remarcou',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (reason == null || !mounted) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(appointmentRepositoryProvider).cancel(
+            appointmentId: widget.appointment.id,
+            reason: reason,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop(
+        const _AppointmentPanelResult(cancelled: true),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e is AppError ? e.userMessage : 'Não foi possível cancelar.';
+      });
+    }
   }
 }
 
@@ -1728,7 +1940,7 @@ class _ScheduleSlotCard extends StatelessWidget {
                 ),
                 if (isBusy)
                   Text(
-                    'Toque para cancelar',
+                    'Toque para ver / cancelar',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
