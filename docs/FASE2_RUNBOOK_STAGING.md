@@ -1,6 +1,6 @@
 # Fase 2 — Runbook de Publicação em Staging
 
-**Preparado em:** 2026-07-24 · **Objetivo:** publicar o MVP em `https://cliente.leonardoperescouto.com`, rodar smoke test contra a URL real e confirmar que o app funciona em ambiente candidato a produção.
+**Preparado em:** 2026-07-24 · **Objetivo:** publicar o MVP em `https://serviceflow.leonardoperescouto.com`, rodar smoke test contra a URL real e confirmar que o app funciona em ambiente candidato a produção.
 
 **Dependência:** Fase 1 (`docs/FASE1_RUNBOOK_SEGURANCA_RLS.md`) concluída — isolamento entre tenants validado. Como o staging reaproveita o mesmo projeto Supabase `Service_Saas` usado em desenvolvimento (decisão registrada nesta sessão), qualquer falha de isolamento na Fase 1 afeta diretamente o que ficará exposto publicamente aqui. **Não pule essa dependência.**
 
@@ -13,7 +13,7 @@ Assim como na Fase 1, este runbook foi preparado sem poder ser executado no sand
 | Decisão | Valor |
 |---|---|
 | Projeto Supabase de staging | Mesmo projeto de dev: `Service_Saas` (`pkbluscdssiiumrppmwa`) |
-| URL de staging | `https://cliente.leonardoperescouto.com` |
+| URL de staging | `https://serviceflow.leonardoperescouto.com` |
 | `dart_defines/staging.json` | Já criado nesta sessão (gitignored), com a mesma `SUPABASE_URL`/`SUPABASE_ANON_KEY` do `dev.json` e `APP_ENV=staging` |
 
 ---
@@ -62,7 +62,7 @@ Os 4 arquivos devem aparecer na raiz do zip (não dentro de subpasta).
 Processo manual via Gerenciador de Arquivos (não há FTP/SSH automatizado neste fluxo):
 
 1. Acesse o painel da Hostinger → **Gerenciador de Arquivos**.
-2. Entre na pasta pública do subdomínio `cliente.leonardoperescouto.com` (geralmente `public_html/cliente` ou uma pasta dedicada ao subdomínio — confira em **Domínios > Subdomínios** qual é o diretório raiz configurado).
+2. Entre na pasta pública do subdomínio `serviceflow.leonardoperescouto.com` (geralmente `public_html/cliente` ou uma pasta dedicada ao subdomínio — confira em **Domínios > Subdomínios** qual é o diretório raiz configurado).
 3. **Antes de sobrescrever**: se já houver uma versão anterior publicada, baixe/backup a pasta atual (zip) por segurança, ou anote a versão/manifesto anterior.
 4. Remova os arquivos antigos da pasta pública (mantendo eventuais arquivos de configuração do provedor, se houver).
 5. Faça upload de `dist/serviceflow-staging.zip`.
@@ -77,7 +77,7 @@ Processo manual via Gerenciador de Arquivos (não há FTP/SSH automatizado neste
 Após a publicação, rode da sua máquina local:
 
 ```bash
-./scripts/smoke_web.sh https://cliente.leonardoperescouto.com
+./scripts/smoke_web.sh https://serviceflow.leonardoperescouto.com
 ```
 
 O script confirma: homepage retorna 200, contém "ServiceFlow", referencia `flutter_bootstrap.js`, os assets principais (`main.dart.js`, `FontManifest.json`, `manifest.json`) carregam, e a rota `/#/login` responde 200.
@@ -101,7 +101,7 @@ Guarde esse dump em local seguro fora do repositório (ele pode conter dados rea
 
 ### Checklist DNS/HTTPS
 
-- [ ] `https://cliente.leonardoperescouto.com` resolve para o IP da Hostinger (`dig cliente.leonardoperescouto.com` ou `nslookup`)
+- [ ] `https://serviceflow.leonardoperescouto.com` resolve para o IP da Hostinger (`dig serviceflow.leonardoperescouto.com` ou `nslookup`)
 - [ ] Certificado HTTPS válido (cadeado no navegador, sem aviso de certificado)
 - [ ] Redirect automático de `http://` para `https://` está ativo
 - [ ] Subdomínio não está listado como "em construção" ou com página padrão da Hostinger
@@ -127,7 +127,7 @@ Reaproveitado de `docs/DEPLOY_STAGING.md`:
 
 - [ ] `dart_defines/staging.json` confirmado
 - [ ] Build staging gerado (`dist/serviceflow-staging.zip` + manifesto)
-- [ ] Pacote publicado em `https://cliente.leonardoperescouto.com`
+- [ ] Pacote publicado em `https://serviceflow.leonardoperescouto.com`
 - [ ] `smoke_web.sh` retornou OK contra a URL real
 - [ ] Backup do banco realizado e guardado fora do repositório
 - [ ] DNS/HTTPS confirmados
@@ -140,6 +140,6 @@ Quando todos os itens acima estiverem ✅, a Fase 2 está concluída e o projeto
 1. Reenviar o `.zip` anterior conhecido como estável (backup feito no passo 3 de T2.3).
 2. Conferir o SHA-256 pelo manifesto do pacote.
 3. Extrair na pasta pública substituindo os arquivos atuais.
-4. Rodar `./scripts/smoke_web.sh https://cliente.leonardoperescouto.com`.
+4. Rodar `./scripts/smoke_web.sh https://serviceflow.leonardoperescouto.com`.
 
 As migrations de banco têm rollbacks em `supabase/rollbacks/`, mas como staging usa o mesmo projeto Supabase de dev, qualquer rollback de banco deve ser decidido com cautela para não perder dados operacionais reais.

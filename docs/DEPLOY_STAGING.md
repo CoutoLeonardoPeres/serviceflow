@@ -4,7 +4,7 @@
 
 - Supabase remoto `Service_Saas` (`pkbluscdssiiumrppmwa`) com migrations `0001` a `0035` aplicadas — **mesmo projeto usado em desenvolvimento** (decisão registrada em 2026-07-24: staging reaproveita o Service_Saas em vez de um projeto Supabase isolado; ver `docs/PROJECT_STATE.md`).
 - `dart_defines/staging.json` já criado nesta sessão a partir de `dart_defines/staging.example.json`, reaproveitando a mesma `SUPABASE_URL`/`SUPABASE_ANON_KEY` do `dev.json` (a anon key não é segredo administrativo — é protegida por RLS).
-- URL de staging: **`https://cliente.leonardoperescouto.com`**.
+- URL de staging: **`https://serviceflow.leonardoperescouto.com`**.
 - **Antes de publicar**: rode a Fase 1 (`docs/FASE1_RUNBOOK_SEGURANCA_RLS.md`) até o fim. Como staging usa o mesmo banco de dev, os testes de isolamento validam o mesmo ambiente que ficará exposto publicamente.
 
 ## Build
@@ -35,7 +35,7 @@ dist/serviceflow-staging.manifest.txt
 Depois de publicar:
 
 ```bash
-./scripts/smoke_web.sh https://cliente.leonardoperescouto.com
+./scripts/smoke_web.sh https://serviceflow.leonardoperescouto.com
 ```
 
 Para validar localmente:
@@ -60,6 +60,6 @@ Para validar localmente:
 1. Reenviar o `.zip` anterior conhecido como estável.
 2. Conferir o SHA-256 pelo manifesto do pacote.
 3. Extrair na pasta pública substituindo os arquivos atuais.
-4. Rodar `./scripts/smoke_web.sh https://cliente.leonardoperescouto.com`.
+4. Rodar `./scripts/smoke_web.sh https://serviceflow.leonardoperescouto.com`.
 
 As migrations de banco têm rollbacks em `supabase/rollbacks/`, mas rollback de produção deve ser decidido caso a caso para não perder dados operacionais.

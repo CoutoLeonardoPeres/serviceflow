@@ -7,7 +7,7 @@
 - Manifesto: `dist/serviceflow-staging-dry-run.manifest.txt`
 - Supabase remoto: `Service_Saas` (`pkbluscdssiiumrppmwa`) — mesmo projeto usado em desenvolvimento e staging
 - Migrations aplicadas: `0001` a `0035`
-- URL de staging: `https://cliente.leonardoperescouto.com`
+- URL de staging: `https://serviceflow.leonardoperescouto.com`
 
 ## Funcionalidades Entregues
 
@@ -45,8 +45,8 @@ Para gerar o pacote definitivo com credenciais de staging:
 ## Pendências Antes de Considerar MVP Aceito
 
 - `dart_defines/staging.json` já criado em 2026-07-24 com credenciais reais de staging.
-- Publicar `dist/serviceflow-staging.zip` na Hostinger em `https://cliente.leonardoperescouto.com`.
-- Rodar `./scripts/smoke_web.sh https://cliente.leonardoperescouto.com`.
+- Publicar `dist/serviceflow-staging.zip` na Hostinger em `https://serviceflow.leonardoperescouto.com`.
+- Rodar `./scripts/smoke_web.sh https://serviceflow.leonardoperescouto.com`.
 - Executar roteiros SQL de isolamento com usuários reais (ver `docs/FASE1_RUNBOOK_SEGURANCA_RLS.md`).
 - Fazer validação manual ponta a ponta: cliente → chamado → agenda → orçamento → link público → aprovação → OS → execução → cobrança → pagamento → recibo.
 

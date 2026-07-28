@@ -875,8 +875,10 @@ class _InviteMemberDialogState extends ConsumerState<_InviteMemberDialog> {
                 roleKey: _roleKey!,
               );
       final tenant = ref.read(currentTenantProvider);
-      const baseUrl =
-          'https://cliente.leonardoperescouto.com/#/aceitar-convite';
+      // Domínio vem de onde o app está servido, não escrito no código: com a
+      // URL fixa, trocar de domínio gerava convite apontando para o antigo.
+      // Mesma abordagem dos links públicos de orçamento e pesquisa.
+      final baseUrl = '${Uri.base.origin}/#/aceitar-convite';
       final inviteLink =
           '$baseUrl?invite=${result.token}&tenant=${tenant?['slug'] ?? ''}';
 

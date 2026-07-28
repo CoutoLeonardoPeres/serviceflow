@@ -92,7 +92,7 @@ Verifica: restore sem erros, contagens de tenants/customers/audit_logs pós-rest
 
 ## Pendente Externo
 
-- Publicar o pacote na Hostinger em `https://cliente.leonardoperescouto.com`.
-- Rodar `./scripts/smoke_web.sh https://cliente.leonardoperescouto.com` contra a URL real.
+- Publicar o pacote na Hostinger em `https://serviceflow.leonardoperescouto.com`.
+- Rodar `./scripts/smoke_web.sh https://serviceflow.leonardoperescouto.com` contra a URL real.
 - Executar os roteiros SQL de isolamento com usuários reais (ver `docs/FASE1_RUNBOOK_SEGURANCA_RLS.md`).
 - Executar `./scripts/validate_backup.sh` com `SUPABASE_DB_URL` real antes do go-live.

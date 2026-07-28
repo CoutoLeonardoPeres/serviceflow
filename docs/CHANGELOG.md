@@ -1,5 +1,29 @@
 # Changelog
 
+## [Domínio de publicação: serviceflow.leonardoperescouto.com] — 2026-07-27
+
+O app passa a ser publicado em `https://serviceflow.leonardoperescouto.com`
+(antes `cliente.leonardoperescouto.com`).
+
+### Corrigido
+
+- **Link de convite apontava para o domínio antigo.** `_InviteMemberDialog`
+  montava a URL com `https://cliente.leonardoperescouto.com/#/aceitar-convite`
+  escrita no código — no domínio novo, todo convite gerado levaria o usuário
+  para um endereço errado. Passa a usar `Uri.base.origin`, como os links
+  públicos de orçamento e de pesquisa de satisfação já faziam.
+
+### Pendente antes de publicar
+
+- Apontar o subdomínio para a pasta do build na Hostinger.
+- No Supabase (Authentication → URL Configuration), incluir
+  `https://serviceflow.leonardoperescouto.com` em **Site URL** e em
+  **Redirect URLs** — sem isso, confirmação de e-mail e recuperação de senha
+  redirecionam para o domínio antigo.
+- Conferir `dart_defines/staging.json`: `CHECKOUT_*_URL` e
+  `BILLING_PORTAL_URL` continuam com o domínio anterior se tiverem sido
+  preenchidos com ele (o arquivo não é versionado).
+
 ## [F5-P4 — Agendar profissional sem usuário do sistema] — 2026-07-27
 
 Arrastar um chamado para o horário respondia "Victor não tem usuário
