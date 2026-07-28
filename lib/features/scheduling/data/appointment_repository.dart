@@ -239,6 +239,21 @@ class AppointmentRepository {
     }
   }
 
+  /// Marca o atendimento como realizado. O trigger de `appointments` registra
+  /// o `status_changed` no histórico — não precisa de RPC própria.
+  Future<void> markDone(String appointmentId) async {
+    try {
+      await _db
+          .from(_table)
+          .update({'status': AppointmentStatus.done.value})
+          .eq('id', appointmentId);
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao confirmar atendimento.', e.toString());
+    }
+  }
+
   /// Histórico de um agendamento, do mais recente para o mais antigo.
   Future<List<AppointmentEvent>> listEvents(String appointmentId) async {
     try {

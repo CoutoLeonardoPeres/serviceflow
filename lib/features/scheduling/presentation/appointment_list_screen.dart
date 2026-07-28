@@ -1427,6 +1427,7 @@ class _AppointmentPanel extends ConsumerStatefulWidget {
 
 class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
   late List<AppointmentTechnician> _assigned;
+  late bool _done;
   bool _busy = false;
   bool _changed = false;
   String? _error;
@@ -1435,6 +1436,7 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
   void initState() {
     super.initState();
     _assigned = [...widget.appointment.technicians];
+    _done = widget.appointment.status == AppointmentStatus.done;
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -1473,6 +1475,7 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
 
     // Chaveado por profissional, não por usuário: parceiro externo não tem
     // login e mesmo assim entra na agenda.
+    final isWorkOrder = appointment.kind == AppointmentKind.workOrder;
     final assignedIds = _assigned.map((t) => t.professionalId).toSet();
     final available = widget.technicians
         .where((technician) => !assignedIds.contains(technician.professionalId))
@@ -1581,15 +1584,69 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
 
         const SizedBox(height: 20),
         const Divider(),
-        const SizedBox(height: 8),
-        Text(
-          'Cancelar devolve o chamado ou a OS para a fila de todos os '
-          'profissionais da categoria.',
-          style: textTheme.bodySmall,
-        ),
         const SizedBox(height: 12),
-        Row(
+
+        // Depois do atendimento: encerrar a OS para cobrança, ou encerrar o
+        // chamado decidindo se vira orçamento.
+        if (_done) ...[
+          Text(
+            isWorkOrder
+                ? 'Atendimento confirmado. Encerre a OS para liberar a '
+                    'cobrança.'
+                : 'Atendimento confirmado. Encerre o chamado e decida se ele '
+                    'vira orçamento.',
+            style: textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              if (isWorkOrder)
+                FilledButton.icon(
+                  onPressed: _busy ? null : _closeWorkOrder,
+                  icon: const Icon(Icons.request_quote_outlined),
+                  label: const Text('Encerrar OS para cobrança'),
+                )
+              else ...[
+                FilledButton.icon(
+                  onPressed: _busy ? null : () => _closeRequest(quote: false),
+                  icon: const Icon(Icons.task_alt),
+                  label: const Text('Encerrar chamado'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _closeRequest(quote: true),
+                  icon: const Icon(Icons.description_outlined),
+                  label: const Text('Encerrar e gerar orçamento'),
+                ),
+              ],
+            ],
+          ),
+        ] else
+          FilledButton.icon(
+            onPressed: _busy ? null : _confirmDone,
+            icon: const Icon(Icons.check_circle_outline),
+            label: const Text('Confirmar atendimento'),
+          ),
+
+        const SizedBox(height: 16),
+        const Divider(),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
           children: [
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _openReference,
+              icon: const Icon(Icons.open_in_new),
+              label: Text(isWorkOrder ? 'Abrir OS' : 'Abrir chamado'),
+            ),
+            if (!_done)
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _confirmCancel,
+                icon: const Icon(Icons.event_busy_outlined),
+                label: const Text('Desagendar'),
+              ),
             TextButton(
               onPressed: _busy
                   ? null
@@ -1598,16 +1655,63 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
                       ),
               child: const Text('Fechar'),
             ),
-            const Spacer(),
-            FilledButton.tonalIcon(
-              onPressed: _busy ? null : _confirmCancel,
-              icon: const Icon(Icons.event_busy_outlined),
-              label: const Text('Cancelar atendimento'),
-            ),
           ],
         ),
+        if (!_done)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Desagendar devolve o item para a fila de todos os '
+              'profissionais da categoria.',
+              style: textTheme.bodySmall,
+            ),
+          ),
       ],
     );
+  }
+
+  /// Abre o chamado ou a OS de origem. Fecha o painel e os popups da agenda
+  /// por cima dele — navegar com eles abertos deixaria a rota destino
+  /// escondida atrás dos diálogos.
+  void _openReference() {
+    final appointment = widget.appointment;
+    final route = appointment.kind == AppointmentKind.workOrder
+        ? AppRoutes.workOrderDetail(appointment.referenceId)
+        : AppRoutes.serviceRequestDetail(appointment.referenceId);
+    Navigator.of(context).pop(_AppointmentPanelResult(changed: _changed));
+    context.go(route);
+  }
+
+  Future<void> _confirmDone() async {
+    await _run(
+      () => ref
+          .read(appointmentRepositoryProvider)
+          .markDone(widget.appointment.id),
+    );
+    if (mounted && _error == null) setState(() => _done = true);
+  }
+
+  Future<void> _closeWorkOrder() async {
+    await _run(
+      () => ref.read(workOrderRepositoryProvider).transitionStatus(
+            id: widget.appointment.referenceId,
+            status: WorkOrderStatus.done,
+          ),
+    );
+    if (!mounted || _error != null) return;
+    Navigator.of(context).pop(const _AppointmentPanelResult(changed: true));
+  }
+
+  Future<void> _closeRequest({required bool quote}) async {
+    await _run(
+      () => ref.read(serviceRequestRepositoryProvider).transitionStatus(
+            id: widget.appointment.referenceId,
+            status: ServiceRequestStatus.closed,
+          ),
+    );
+    if (!mounted || _error != null) return;
+    Navigator.of(context).pop(const _AppointmentPanelResult(changed: true));
+    if (quote) context.go(AppRoutes.quotationNew);
   }
 
   Future<void> _confirmCancel() async {
@@ -2090,7 +2194,7 @@ class _ScheduleSlotCard extends StatelessWidget {
                 ),
                 if (isBusy)
                   Text(
-                    'Toque para ver / cancelar',
+                    'Toque para ver o atendimento',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -2654,19 +2758,23 @@ Appointment? _appointmentForSlot({
   required List<Technician> visibleTechnicians,
   required List<Appointment> appointments,
 }) {
-  final relevantTechnicianIds = selectedTechnician != null
-      ? {
-          if (selectedTechnician.userId != null) selectedTechnician.userId!,
-        }
+  // Casa por profissional, não por usuário: parceiro externo não tem login,
+  // então `technicianUserId` vem nulo e o atendimento dele nunca aparecia no
+  // horário — sumia da fila e não surgia em lugar nenhum.
+  final relevantProfessionalIds = selectedTechnician != null
+      ? {selectedTechnician.professionalId}
       : visibleTechnicians
-          .where((technician) => technician.userId != null)
-          .map((technician) => technician.userId!)
+          .map((technician) => technician.professionalId)
           .toSet();
   for (final appointment in appointments) {
-    final technicianId = appointment.technicianUserId;
-    if (technicianId == null || !relevantTechnicianIds.contains(technicianId)) {
-      continue;
-    }
+    // A consulta do mês não filtra status, então o cancelado voltaria a
+    // ocupar o horário que acabou de ser liberado.
+    if (appointment.status == AppointmentStatus.cancelled) continue;
+    final belongs = appointment.technicians.any(
+      (technician) =>
+          relevantProfessionalIds.contains(technician.professionalId),
+    );
+    if (!belongs) continue;
     final appointmentStart = appointment.scheduledStart.toLocal();
     final appointmentEnd = appointment.scheduledEnd.toLocal();
     if (!slot.isBefore(appointmentStart) && slot.isBefore(appointmentEnd)) {
@@ -2679,6 +2787,8 @@ Appointment? _appointmentForSlot({
 Map<int, List<Appointment>> _groupByDay(List<Appointment> appointments) {
   final grouped = <int, List<Appointment>>{};
   for (final appointment in appointments) {
+    // Cancelado não conta como ocupação do dia nem vira marcador no card.
+    if (appointment.status == AppointmentStatus.cancelled) continue;
     grouped
         .putIfAbsent(appointment.scheduledStart.day, () => [])
         .add(appointment);
