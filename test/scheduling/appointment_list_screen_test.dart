@@ -54,7 +54,9 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    // O calendario abre como popup no primeiro frame — sem assentar a
+    // animacao do dialog, nada dele existe ainda na arvore.
+    await tester.pumpAndSettle();
 
     expect(find.text('Agenda'), findsOneWidget);
     expect(find.text('Livre'), findsOneWidget);
@@ -64,7 +66,7 @@ void main() {
     final currentMonth = find.byKey(const ValueKey('calendar-month-title'));
     final before = tester.widget<Text>(currentMonth).data;
     await tester.tap(find.byTooltip('Próximo mês'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     final after = tester.widget<Text>(currentMonth).data;
 
     expect(after, isNot(before));
@@ -84,14 +86,15 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('calendar-day-15')));
     await tester.pumpAndSettle();
 
     expect(find.text('Horários do dia'), findsOneWidget);
-    expect(find.text('Profissionais'), findsOneWidget);
+    expect(find.text('Profissionais'), findsWidgets);
     expect(find.text('Visão geral'), findsWidgets);
-    expect(find.text('Carlos'), findsOneWidget);
+    // Aparece na sidebar do calendario e na do dia.
+    expect(find.text('Carlos'), findsWidgets);
   });
 }

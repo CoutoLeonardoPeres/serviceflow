@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/error/app_error.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/widgets/app_form_dialog.dart';
 import '../../../core/widgets/app_form_layout.dart';
 import '../../../core/widgets/error_view.dart';
@@ -149,7 +151,38 @@ class AppointmentListScreen extends ConsumerStatefulWidget {
       _AppointmentListScreenState();
 }
 
+/// A rota da agenda é só o pano de fundo: o calendário abre como popup, no
+/// mesmo formato do "Horários do dia". Fechar o popup volta para o início.
 class _AppointmentListScreenState extends ConsumerState<AppointmentListScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openCalendar());
+  }
+
+  Future<void> _openCalendar() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => const _MonthCalendarDialog(),
+    );
+    if (!mounted) return;
+    context.go(AppRoutes.dashboard);
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(body: SizedBox.shrink());
+}
+
+class _MonthCalendarDialog extends ConsumerStatefulWidget {
+  const _MonthCalendarDialog();
+
+  @override
+  ConsumerState<_MonthCalendarDialog> createState() =>
+      _MonthCalendarDialogState();
+}
+
+class _MonthCalendarDialogState extends ConsumerState<_MonthCalendarDialog> {
   late DateTime _visibleMonth;
 
   @override
@@ -200,87 +233,112 @@ class _AppointmentListScreenState extends ConsumerState<AppointmentListScreen> {
     final state = ref.watch(appointmentListProvider);
     final appointmentsByDay = _groupByDay(state.items);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Agenda'),
-        actions: [
-          IconButton(
-            tooltip: 'Recarregar',
-            icon: const Icon(Icons.refresh),
-            onPressed: () =>
-                ref.read(appointmentListProvider.notifier).refresh(),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1480, maxHeight: 980),
         child: NeomorphicPanel(
           borderRadius: 34,
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          padding: EdgeInsets.zero,
+          child: Column(
             children: [
-              // Mesma fila da agenda do dia: aqui o card é solto sobre um dia
-              // e o horário é escolhido no passo seguinte.
-              SizedBox(
-                width: 300,
-                child: _ProfessionSidebar(
-                  selectedProfessionalId: null,
-                  technicians: ref.watch(techniciansProvider).maybeWhen(
-                        data: (items) => items,
-                        orElse: () => const <Technician>[],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 20, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Agenda',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
-                  onSelectGeneral: () {},
-                  onSelectTechnician: (_) {},
+                    ),
+                    IconButton(
+                      tooltip: 'Recarregar',
+                      icon: const Icon(Icons.refresh),
+                      onPressed: () =>
+                          ref.read(appointmentListProvider.notifier).refresh(),
+                    ),
+                    IconButton(
+                      tooltip: 'Fechar',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 18),
+              const Divider(height: 1),
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () =>
-                      ref.read(appointmentListProvider.notifier).refresh(),
-                  child: ListView(
-                    padding: const EdgeInsets.only(bottom: 24),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _CalendarHeader(
-                        month: _visibleMonth,
-                        onPrevious: () => _moveMonth(-1),
-                        onNext: () => _moveMonth(1),
+                      // Mesma fila da agenda do dia: aqui o card é solto sobre
+                      // um dia e o horário é escolhido no passo seguinte.
+                      SizedBox(
+                        width: 300,
+                        child: _ProfessionSidebar(
+                          selectedProfessionalId: null,
+                          technicians: ref.watch(techniciansProvider).maybeWhen(
+                                data: (items) => items,
+                                orElse: () => const <Technician>[],
+                              ),
+                          onSelectGeneral: () {},
+                          onSelectTechnician: (_) {},
+                        ),
                       ),
-                      const SizedBox(height: 14),
-                      const _LegendRow(),
-                      const SizedBox(height: 14),
-                      if (state.error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: ErrorView(
-                            message: state.error!.userMessage,
-                            onRetry: () => ref
-                                .read(appointmentListProvider.notifier)
-                                .refresh(),
-                          ),
-                        ),
-                      if (state.isLoading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
-                      _CalendarGrid(
-                        month: _visibleMonth,
-                        appointmentsByDay: appointmentsByDay,
-                        onDayTap: (day) => _openScheduleDialog(
-                            day, appointmentsByDay[day.day] ?? const []),
-                        onItemDropped: (day, drag) => _openScheduleDialog(
-                          day,
-                          appointmentsByDay[day.day] ?? const [],
-                          pending: drag,
-                        ),
-                        weeklySchedule:
-                            ref.watch(companySettingsProvider).maybeWhen(
-                                  data: (settings) => settings.weeklySchedule,
-                                  orElse: defaultWeeklySchedule,
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          children: [
+                            _CalendarHeader(
+                              month: _visibleMonth,
+                              onPrevious: () => _moveMonth(-1),
+                              onNext: () => _moveMonth(1),
+                            ),
+                            const SizedBox(height: 14),
+                            const _LegendRow(),
+                            const SizedBox(height: 14),
+                            if (state.error != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: ErrorView(
+                                  message: state.error!.userMessage,
+                                  onRetry: () => ref
+                                      .read(appointmentListProvider.notifier)
+                                      .refresh(),
                                 ),
+                              ),
+                            if (state.isLoading)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 24),
+                                child:
+                                    Center(child: CircularProgressIndicator()),
+                              ),
+                            _CalendarGrid(
+                              month: _visibleMonth,
+                              appointmentsByDay: appointmentsByDay,
+                              onDayTap: (day) => _openScheduleDialog(
+                                  day, appointmentsByDay[day.day] ?? const []),
+                              onItemDropped: (day, drag) => _openScheduleDialog(
+                                day,
+                                appointmentsByDay[day.day] ?? const [],
+                                pending: drag,
+                              ),
+                              weeklySchedule:
+                                  ref.watch(companySettingsProvider).maybeWhen(
+                                        data: (settings) =>
+                                            settings.weeklySchedule,
+                                        orElse: defaultWeeklySchedule,
+                                      ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
