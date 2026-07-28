@@ -4,6 +4,7 @@ import '../../../shared/providers/supabase_provider.dart';
 import '../../stock/application/stock_notifier.dart';
 import '../data/purchase_repository.dart';
 import '../domain/purchase_order.dart';
+import '../domain/material_catalog.dart';
 import '../domain/supplier.dart';
 
 final purchaseRepositoryProvider = Provider<PurchaseRepository>((ref) {
@@ -18,6 +19,32 @@ final suppliersProvider =
     FutureProvider.autoDispose<List<Supplier>>((ref) async {
   final search = ref.watch(supplierSearchProvider);
   return ref.read(purchaseRepositoryProvider).listSuppliers(search: search);
+});
+
+final supplierDetailProvider =
+    FutureProvider.autoDispose.family<Supplier, String>((ref, id) async {
+  return ref.read(purchaseRepositoryProvider).getSupplier(id);
+});
+
+// ── Catálogo de materiais ────────────────────────────────────────────────────
+
+final materialCategoriesProvider =
+    FutureProvider<List<MaterialCategory>>((ref) async {
+  return ref.read(purchaseRepositoryProvider).listCategories();
+});
+
+/// Preços de um fornecedor. Family pelo id do fornecedor.
+final supplierPricesProvider = FutureProvider.autoDispose
+    .family<List<SupplierPrice>, String>((ref, supplierId) async {
+  return ref
+      .read(purchaseRepositoryProvider)
+      .listSupplierPrices(supplierId: supplierId);
+});
+
+/// Ranking de fornecedores para um produto, do mais barato ao mais caro.
+final bestPricesProvider = FutureProvider.autoDispose
+    .family<List<BestPriceOption>, String>((ref, productId) async {
+  return ref.read(purchaseRepositoryProvider).bestPrices(productId);
 });
 
 // ── Pedidos ──────────────────────────────────────────────────────────────────

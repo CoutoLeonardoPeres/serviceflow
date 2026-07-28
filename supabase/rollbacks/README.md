@@ -37,6 +37,7 @@ precisa **restaurar** a versão antiga da função — não apagá-la.
 | 0056 | 0008 (`convert_approved_quotation_to_work_order`) | Aridade igual. O rollback restaura o corpo completo de 0008 e apaga o trigger, `_sf_quotation_approved_trigger` e `_sf_work_order_from_quotation`. Rodar o de 0008 fora de ordem deixa o trigger apontando para uma função inexistente e **toda aprovação de orçamento passa a falhar** |
 | 0057 | 0008 (`transition_work_order`), 0013 (`create_receivable_from_work_order`) | Aridade igual nas duas. O rollback restaura os corpos de 0008/0013, apaga `_sf_work_order_can_transition` e `my_permissions`. Sem `my_permissions` o app cai no modo permissivo (mostra ações que o banco recusa) — é intencional, mas some a filtragem por permissão |
 | 0058 | — | Todas as funções são novas; o rollback só as apaga junto com os dois triggers. Independente da 0056: os dois triggers de `quotations` não se cruzam. Chamados já fechados continuam fechados |
+| 0059 | — | **Único rollback da série que perde dados**: descarta preços, categorias, histórico e os campos novos de fornecedor e produto. Exporte antes (o arquivo traz os `\copy`). `products.category_id` referencia `material_categories`, então a coluna sai antes da tabela |
 
 **Armadilha de aridade:** `CREATE OR REPLACE` com número de parâmetros diferente
 **não substitui** — cria uma sobrecarga. As duas versões coexistem e chamadas

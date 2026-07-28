@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/error/app_error.dart';
 import '../domain/purchase_order.dart';
+import '../domain/material_catalog.dart';
 import '../domain/supplier.dart';
 
 /// Acesso a fornecedores e pedidos de compra.
@@ -38,28 +39,30 @@ class PurchaseRepository {
     }
   }
 
-  Future<Supplier> createSupplier({
-    required String name,
-    String? tradeName,
-    String? document,
-    String? email,
-    String? phone,
-    String? notes,
-  }) async {
+  /// Cria ou atualiza o fornecedor a partir do próprio modelo.
+  ///
+  /// Uma função só, com payload do domínio, em vez de duas com vinte
+  /// parâmetros nomeados cada — o cadastro cresceu na 0059 e a assinatura
+  /// antiga não escalava.
+  Future<Supplier> saveSupplier(Supplier supplier) async {
     try {
-      final row = await _db
-          .from('suppliers')
-          .insert({
-            'name': name.trim(),
-            'trade_name': _nullIfEmpty(tradeName),
-            'document': _nullIfEmpty(document),
-            'email': _nullIfEmpty(email),
-            'phone': _nullIfEmpty(phone),
-            'notes': _nullIfEmpty(notes),
-          })
-          .select()
-          .single();
-      return supplierFromRow(row);
+      final payload = supplier.toPayload();
+      final row = supplier.id.isEmpty
+          ? await _db.from('suppliers').insert(payload).select().single()
+          : await _db
+              .from('suppliers')
+              .update(payload)
+              .eq('id', supplier.id)
+              .select()
+              .single();
+
+      final saved = supplierFromRow(row);
+      await _replaceSupplierCategories(
+        supplierId: saved.id,
+        tenantId: saved.tenantId,
+        categoryIds: supplier.categoryIds,
+      );
+      return saved.copyWith(categoryIds: supplier.categoryIds);
     } on PostgrestException catch (e) {
       if (e.code == '23505') {
         throw const ValidationError(
@@ -70,38 +73,163 @@ class PurchaseRepository {
     }
   }
 
-  Future<Supplier> updateSupplier({
-    required String id,
-    required String name,
-    required bool isActive,
-    String? tradeName,
-    String? document,
-    String? email,
-    String? phone,
-    String? notes,
+  /// Substitui as categorias atendidas. Apaga e reinsere de propósito: a
+  /// tabela é um vínculo puro, sem histórico, e diffar duas listas pequenas
+  /// custaria mais código do que vale.
+  Future<void> _replaceSupplierCategories({
+    required String supplierId,
+    required String tenantId,
+    required List<String> categoryIds,
   }) async {
+    await _db.from('supplier_categories').delete().eq('supplier_id', supplierId);
+    if (categoryIds.isEmpty) return;
+    await _db.from('supplier_categories').insert([
+      for (final id in categoryIds)
+        {
+          'supplier_id': supplierId,
+          'category_id': id,
+          'tenant_id': tenantId,
+        },
+    ]);
+  }
+
+  Future<Supplier> getSupplier(String id) async {
     try {
       final row = await _db
           .from('suppliers')
-          .update({
-            'name': name.trim(),
-            'trade_name': _nullIfEmpty(tradeName),
-            'document': _nullIfEmpty(document),
-            'email': _nullIfEmpty(email),
-            'phone': _nullIfEmpty(phone),
-            'notes': _nullIfEmpty(notes),
-            'is_active': isActive,
-          })
+          .select('*, supplier_categories(category_id)')
           .eq('id', id)
-          .select()
           .single();
       return supplierFromRow(row);
     } on PostgrestException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  // ── Categorias de material ─────────────────────────────────────────────────
+
+  Future<List<MaterialCategory>> listCategories({bool activeOnly = true}) async {
+    try {
+      var query = _db.from('material_categories').select();
+      if (activeOnly) query = query.eq('is_active', true);
+      final rows = await query.order('name');
+      return (rows as List)
+          .cast<Map<String, dynamic>>()
+          .map(materialCategoryFromRow)
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  /// Cria as categorias padrão do setor. Idempotente no banco — chamar duas
+  /// vezes não duplica. Devolve quantas foram criadas agora.
+  Future<int> seedCategories() async {
+    try {
+      final result = await _db.rpc('seed_material_categories');
+      return (result as num?)?.toInt() ?? 0;
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  Future<MaterialCategory> saveCategory(MaterialCategory category) async {
+    try {
+      final payload = {
+        'name': category.name.trim(),
+        'markup_percent': category.markupPercent,
+        'is_active': category.isActive,
+      };
+      final row = category.id.isEmpty
+          ? await _db
+              .from('material_categories')
+              .insert(payload)
+              .select()
+              .single()
+          : await _db
+              .from('material_categories')
+              .update(payload)
+              .eq('id', category.id)
+              .select()
+              .single();
+      return materialCategoryFromRow(row);
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        throw const ValidationError('Já existe uma categoria com este nome.');
+      }
+      throw _mapError(e);
+    }
+  }
+
+  // ── Preços por fornecedor ──────────────────────────────────────────────────
+
+  Future<List<SupplierPrice>> listSupplierPrices({
+    String? supplierId,
+    String? productId,
+  }) async {
+    try {
+      var query = _db
+          .from('supplier_products')
+          .select('*, suppliers(name), products(name)');
+      if (supplierId != null) query = query.eq('supplier_id', supplierId);
+      if (productId != null) query = query.eq('product_id', productId);
+      final rows = await query.order('price_cents');
+      return (rows as List)
+          .cast<Map<String, dynamic>>()
+          .map(supplierPriceFromRow)
+          .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  Future<SupplierPrice> saveSupplierPrice(SupplierPrice price) async {
+    try {
+      final payload = price.toPayload();
+      final row = price.id.isEmpty
+          ? await _db
+              .from('supplier_products')
+              .insert(payload)
+              .select('*, suppliers(name), products(name)')
+              .single()
+          : await _db
+              .from('supplier_products')
+              .update(payload)
+              .eq('id', price.id)
+              .select('*, suppliers(name), products(name)')
+              .single();
+      return supplierPriceFromRow(row);
+    } on PostgrestException catch (e) {
       if (e.code == '23505') {
         throw const ValidationError(
-          'Já existe um fornecedor com este documento.',
+          'Este fornecedor já tem preço para este produto.',
         );
       }
+      throw _mapError(e);
+    }
+  }
+
+  Future<void> deleteSupplierPrice(String id) async {
+    try {
+      await _db.from('supplier_products').delete().eq('id', id);
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  /// Ranking de fornecedores para o produto, do mais barato ao mais caro, com
+  /// o repasse ao cliente já calculado e o saldo próprio junto.
+  Future<List<BestPriceOption>> bestPrices(String productId) async {
+    try {
+      final rows = await _db.rpc(
+        'best_price_for_product',
+        params: {'p_product_id': productId},
+      );
+      return (rows as List)
+          .cast<Map<String, dynamic>>()
+          .map(bestPriceOptionFromRow)
+          .toList();
+    } on PostgrestException catch (e) {
       throw _mapError(e);
     }
   }

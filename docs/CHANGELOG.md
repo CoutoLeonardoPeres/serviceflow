@@ -1,5 +1,41 @@
 # Changelog
 
+## [F7-P1 — Catálogo de materiais, fornecedores e preços] — 2026-07-28
+
+Primeira das três fases do módulo de materiais (migration 0059).
+
+### Adicionado
+
+- **Categorias de material** com seed do setor: elétrica, hidráulica,
+  construção, acabamento, gesso e drywall, vidraçaria, marcenaria, serralheria,
+  impermeabilização, climatização, piscina, CFTV, redes, automação predial,
+  iluminação, solar, bombas, ferramentas, EPI, elevadores, incêndio,
+  paisagismo, limpeza e equipamentos industriais. O seed é idempotente e roda
+  a pedido, na própria tela.
+- **Cadastro de fornecedor completo**: inscrição estadual, pessoa de contato,
+  WhatsApp, site, endereço, prazo de entrega, condição de pagamento, pedido
+  mínimo e se entrega ou é retirada. Mais as categorias que ele atende — que é
+  o filtro que faz uma lista de 40 fornecedores continuar navegável.
+- **Tabela de preços por fornecedor** (`supplier_products`), com o código do
+  fornecedor, embalagem de venda, quantidade mínima e validade da tabela.
+- **Histórico de preço** alimentado por trigger, não pelo app: um caminho de
+  atualização esquecido deixaria buraco justo onde se quer auditar. Registra a
+  origem (manual, planilha ou pedido de compra) e ignora update que não mudou
+  o valor.
+- **Margem de repasse em três níveis** — produto, categoria, empresa —
+  resolvidos do mais específico para o mais geral. `null` significa "herda",
+  não "zero": zero venderia a preço de custo.
+- **`best_price_for_product`** devolve o ranking de fornecedores do mais
+  barato ao mais caro, já com o repasse ao cliente calculado e o saldo próprio
+  junto. Tabela vencida não some da lista, mas perde a vez.
+
+### Notas
+
+- O rollback da 0059 **perde dados** (preços, categorias, endereços). O
+  arquivo traz os comandos de exportação antes de rodar.
+- Fases seguintes: importação por planilha (F7-P2) e o melhor preço aparecendo
+  dentro de orçamento e OS (F7-P3).
+
 ## [Dropdowns estourando a célula do formulário] — 2026-07-28
 
 ### Corrigido
