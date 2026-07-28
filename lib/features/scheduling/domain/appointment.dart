@@ -133,6 +133,7 @@ class AppointmentTechnician {
     required this.professionalId,
     this.userId,
     this.name,
+    this.category,
   });
 
   /// Sempre presente: é por ele que a agenda identifica o profissional.
@@ -140,9 +141,18 @@ class AppointmentTechnician {
 
   /// Só existe para quem tem login no sistema — parceiro externo não tem.
   final String? userId;
+
+  /// Vem do cadastro de profissionais; `profiles.full_name` é usado só como
+  /// reserva, porque parceiro externo não tem linha em `profiles`.
   final String? name;
+  final String? category;
 
   String get label => name ?? 'Profissional';
+
+  String get labelWithCategory =>
+      category == null || category!.trim().isEmpty
+          ? label
+          : '$label · $category';
 }
 
 Appointment appointmentFromRow(Map<String, dynamic> row) {
@@ -159,8 +169,13 @@ Appointment appointmentFromRow(Map<String, dynamic> row) {
           AppointmentTechnician(
             professionalId: entry['professional_id'] as String,
             userId: entry['technician_user_id'] as String?,
-            name: entry['profiles'] is Map
-                ? (entry['profiles'] as Map)['full_name'] as String?
+            name: entry['service_professionals'] is Map
+                ? (entry['service_professionals'] as Map)['name'] as String?
+                : entry['profiles'] is Map
+                    ? (entry['profiles'] as Map)['full_name'] as String?
+                    : null,
+            category: entry['service_professionals'] is Map
+                ? (entry['service_professionals'] as Map)['category'] as String?
                 : null,
           ),
   ];

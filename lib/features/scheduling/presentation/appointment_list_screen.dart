@@ -1367,7 +1367,7 @@ class _DayScheduleDialogState extends ConsumerState<_DayScheduleDialog> {
     final result = await showAppFormDialog<_AppointmentPanelResult>(
       context: context,
       title: 'Atendimento agendado',
-      maxWidth: 640,
+      maxWidth: 760,
       child: _AppointmentPanel(
         appointment: appointment,
         technicians: technicians,
@@ -1481,7 +1481,10 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
         .where((technician) => !assignedIds.contains(technician.professionalId))
         .toList();
 
-    return Column(
+    // Rolável: com dois ou três profissionais e os blocos de ação, o conteúdo
+    // passa da altura do diálogo e o texto era cortado sem aviso.
+    return SingleChildScrollView(
+      child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1489,6 +1492,7 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
           appointment.customerName ?? 'Cliente não informado',
           style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
+        const SizedBox(height: 2),
         Text(
           '${appointment.kind.label} · $period',
           style: textTheme.bodySmall,
@@ -1510,7 +1514,10 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
               contentPadding: EdgeInsets.zero,
               dense: true,
               leading: const Icon(Icons.person_outline),
-              title: Text(technician.label),
+              title: Text(
+                technician.labelWithCategory,
+                overflow: TextOverflow.ellipsis,
+              ),
               trailing: _assigned.length > 1
                   ? IconButton(
                       tooltip: 'Remover do atendimento',
@@ -1586,47 +1593,68 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
         const Divider(),
         const SizedBox(height: 12),
 
-        // Depois do atendimento: encerrar a OS para cobrança, ou encerrar o
-        // chamado decidindo se vira orçamento.
-        if (_done) ...[
-          Text(
-            isWorkOrder
-                ? 'Atendimento confirmado. Encerre a OS para liberar a '
-                    'cobrança.'
-                : 'Atendimento confirmado. Encerre o chamado e decida se ele '
-                    'vira orçamento.',
-            style: textTheme.bodySmall,
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              if (isWorkOrder)
-                FilledButton.icon(
-                  onPressed: _busy ? null : _closeWorkOrder,
-                  icon: const Icon(Icons.request_quote_outlined),
-                  label: const Text('Encerrar OS para cobrança'),
-                )
-              else ...[
-                FilledButton.icon(
-                  onPressed: _busy ? null : () => _closeRequest(quote: false),
-                  icon: const Icon(Icons.task_alt),
-                  label: const Text('Encerrar chamado'),
+        Text(
+          'Desfecho do atendimento',
+          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          isWorkOrder
+              ? 'Ao terminar o serviço, encerre a OS para liberar a cobrança.'
+              : 'Ao terminar a visita, transforme o chamado em orçamento — ou '
+                  'encerre, se o cliente não quiser o serviço.',
+          style: textTheme.bodySmall,
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            if (!_done)
+              FilledButton.tonalIcon(
+                onPressed: _busy ? null : _confirmDone,
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Confirmar atendimento'),
+              ),
+            if (isWorkOrder)
+              FilledButton.icon(
+                onPressed: _busy ? null : _closeWorkOrder,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('Encerrar OS para cobrança'),
+              )
+            else ...[
+              FilledButton.icon(
+                onPressed: _busy ? null : _convertToQuotation,
+                icon: const Icon(Icons.description_outlined),
+                label: const Text('Transformar em orçamento'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _closeRequest,
+                icon: const Icon(Icons.do_not_disturb_on_outlined),
+                label: const Text('Encerrar chamado'),
+              ),
+            ],
+          ],
+        ),
+        if (_done)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _closeRequest(quote: true),
-                  icon: const Icon(Icons.description_outlined),
-                  label: const Text('Encerrar e gerar orçamento'),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Atendimento confirmado como realizado.',
+                    style: textTheme.bodySmall,
+                  ),
                 ),
               ],
-            ],
-          ),
-        ] else
-          FilledButton.icon(
-            onPressed: _busy ? null : _confirmDone,
-            icon: const Icon(Icons.check_circle_outline),
-            label: const Text('Confirmar atendimento'),
+            ),
           ),
 
         const SizedBox(height: 16),
@@ -1641,12 +1669,11 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
               icon: const Icon(Icons.open_in_new),
               label: Text(isWorkOrder ? 'Abrir OS' : 'Abrir chamado'),
             ),
-            if (!_done)
-              OutlinedButton.icon(
-                onPressed: _busy ? null : _confirmCancel,
-                icon: const Icon(Icons.event_busy_outlined),
-                label: const Text('Desagendar'),
-              ),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _confirmCancel,
+              icon: const Icon(Icons.event_busy_outlined),
+              label: const Text('Desagendar'),
+            ),
             TextButton(
               onPressed: _busy
                   ? null
@@ -1657,16 +1684,16 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
             ),
           ],
         ),
-        if (!_done)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              'Desagendar devolve o item para a fila de todos os '
-              'profissionais da categoria.',
-              style: textTheme.bodySmall,
-            ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            'Desagendar devolve o item para a fila de todos os profissionais '
+            'da categoria.',
+            style: textTheme.bodySmall,
           ),
+        ),
       ],
+      ),
     );
   }
 
@@ -1702,7 +1729,42 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
     Navigator.of(context).pop(const _AppointmentPanelResult(changed: true));
   }
 
-  Future<void> _closeRequest({required bool quote}) async {
+  /// Abre o orçamento já com o chamado de origem selecionado. O chamado não é
+  /// encerrado aqui: quem fecha é a aprovação do orçamento mais adiante.
+  void _convertToQuotation() {
+    Navigator.of(context).pop(const _AppointmentPanelResult(changed: true));
+    context.go(
+      Uri(
+        path: AppRoutes.quotationNew,
+        queryParameters: {'chamado': widget.appointment.referenceId},
+      ).toString(),
+    );
+  }
+
+  /// Cliente não quis o serviço: encerra o chamado sem gerar orçamento.
+  Future<void> _closeRequest() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Encerrar chamado'),
+        content: const Text(
+          'Use quando o cliente não quiser realizar o serviço. O chamado é '
+          'encerrado sem gerar orçamento.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Encerrar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     await _run(
       () => ref.read(serviceRequestRepositoryProvider).transitionStatus(
             id: widget.appointment.referenceId,
@@ -1711,7 +1773,6 @@ class _AppointmentPanelState extends ConsumerState<_AppointmentPanel> {
     );
     if (!mounted || _error != null) return;
     Navigator.of(context).pop(const _AppointmentPanelResult(changed: true));
-    if (quote) context.go(AppRoutes.quotationNew);
   }
 
   Future<void> _confirmCancel() async {

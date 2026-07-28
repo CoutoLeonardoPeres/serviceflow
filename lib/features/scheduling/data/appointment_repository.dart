@@ -41,7 +41,7 @@ class AppointmentRepository {
   }) async {
     try {
       var query = _db.from(_table).select(
-            '*, customers(name), appointment_assignments!inner(technician_user_id, professional_id, revoked_at, profiles(full_name, phone))',
+            '*, customers(name), appointment_assignments!inner(technician_user_id, professional_id, revoked_at, profiles(full_name, phone), service_professionals(name, category))',
           );
 
       if (filter.status != null) {
@@ -84,7 +84,7 @@ class AppointmentRepository {
       final row = await _db
           .from(_table)
           .select(
-            '*, customers(name), appointment_assignments(technician_user_id, professional_id, revoked_at, profiles(full_name, phone))',
+            '*, customers(name), appointment_assignments(technician_user_id, professional_id, revoked_at, profiles(full_name, phone), service_professionals(name, category))',
           )
           .eq('id', id)
           .single();

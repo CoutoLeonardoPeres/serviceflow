@@ -35,9 +35,17 @@ final _quoteRequestsProvider =
 });
 
 class QuotationFormScreen extends ConsumerStatefulWidget {
-  const QuotationFormScreen({super.key, this.embedded = false});
+  const QuotationFormScreen({
+    super.key,
+    this.embedded = false,
+    this.initialRequestId,
+  });
 
   final bool embedded;
+
+  /// Chamado de origem, quando o orçamento nasce de uma visita técnica na
+  /// agenda. Pré-seleciona o chamado e o cliente dele.
+  final String? initialRequestId;
 
   @override
   ConsumerState<QuotationFormScreen> createState() =>
@@ -54,6 +62,38 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   final _notesCtrl = TextEditingController();
   Customer? _customer;
   ServiceRequest? _request;
+  bool _initialRequestApplied = false;
+
+  /// Pré-seleciona o chamado (e o cliente dele) quando o orçamento nasce de
+  /// uma visita na agenda. Roda uma vez, assim que a lista de chamados chega —
+  /// o `initialRequestId` sozinho não basta porque o dropdown compara objetos.
+  void _applyInitialRequest(List<ServiceRequest> requests) {
+    final wanted = widget.initialRequestId;
+    if (wanted == null || _initialRequestApplied) return;
+
+    final match = requests
+        .cast<ServiceRequest?>()
+        .firstWhere((request) => request?.id == wanted, orElse: () => null);
+    if (match == null) return;
+
+    _initialRequestApplied = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final customer = ref.read(_quoteCustomersProvider).maybeWhen(
+            data: (items) => items
+                .cast<Customer?>()
+                .firstWhere(
+                  (item) => item?.id == match.customerId,
+                  orElse: () => null,
+                ),
+            orElse: () => null,
+          );
+      setState(() {
+        _request = match;
+        _customer ??= customer;
+      });
+    });
+  }
   QuotationItemKind _kind = QuotationItemKind.service;
   DateTime _validUntil = DateTime.now().add(const Duration(days: 15));
   final List<QuotationDraftItem> _items = [];
@@ -221,26 +261,29 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 requests.when(
                   loading: () => const LinearProgressIndicator(),
                   error: (_, __) => const SizedBox.shrink(),
-                  data: (items) => DropdownButtonFormField<ServiceRequest>(
-                    initialValue: _request,
-                    isExpanded: true,
-                    decoration:
-                        const InputDecoration(labelText: 'Chamado opcional'),
-                    items: items
-                        .map(
-                          (request) => DropdownMenuItem(
-                            value: request,
-                            child: Text(
-                              '${request.displayNumber} · ${request.title}',
-                              overflow: TextOverflow.ellipsis,
+                  data: (items) {
+                    _applyInitialRequest(items);
+                    return DropdownButtonFormField<ServiceRequest>(
+                      initialValue: _request,
+                      isExpanded: true,
+                      decoration:
+                          const InputDecoration(labelText: 'Chamado opcional'),
+                      items: items
+                          .map(
+                            (request) => DropdownMenuItem(
+                              value: request,
+                              child: Text(
+                                '${request.displayNumber} · ${request.title}',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: isLoading
-                        ? null
-                        : (value) => setState(() => _request = value),
-                  ),
+                          )
+                          .toList(),
+                      onChanged: isLoading
+                          ? null
+                          : (value) => setState(() => _request = value),
+                    );
+                  },
                 ),
                 OutlinedButton.icon(
                   onPressed: isLoading ? null : _pickValidUntil,

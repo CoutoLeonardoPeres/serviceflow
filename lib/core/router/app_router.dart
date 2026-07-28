@@ -440,7 +440,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.quotationNew,
-            builder: (_, __) => const QuotationFormScreen(),
+            // ?chamado=<id> vem da agenda, ao transformar uma visita técnica
+            // em orçamento.
+            builder: (_, state) => QuotationFormScreen(
+              initialRequestId: state.uri.queryParameters['chamado'],
+            ),
           ),
           GoRoute(
             path: '/orcamentos/:id',
