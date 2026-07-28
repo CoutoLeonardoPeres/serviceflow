@@ -330,6 +330,32 @@ class QuotationRepository {
     }
   }
 
+  /// Registra a resposta do cliente pelo próprio sistema — quando ele
+  /// respondeu por telefone, WhatsApp ou pessoalmente, sem usar o link.
+  Future<void> decideInternal({
+    required String quotationId,
+    required QuotationPublicDecision decision,
+    required String approverName,
+    String? comments,
+  }) async {
+    try {
+      await _db.rpc(
+        'decide_quotation',
+        params: {
+          'p_quotation_id': quotationId,
+          'p_decision': decision.value,
+          'p_approver_name': approverName.trim(),
+          'p_comments':
+              (comments == null || comments.trim().isEmpty) ? null : comments.trim(),
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    } catch (e) {
+      throw UnexpectedError('Erro ao registrar a decisao.', e.toString());
+    }
+  }
+
   Future<void> decidePublic({
     required String token,
     required QuotationPublicDecision decision,

@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/error/app_error.dart';
 import '../../../core/files/attachment_link_action.dart';
 import '../../../core/files/stored_attachment.dart';
 import '../../../core/router/app_router.dart';
@@ -75,6 +77,103 @@ class QuotationDetailScreen extends ConsumerWidget {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('Não foi possível gerar o PDF agora.'),
+        ),
+      );
+    }
+  }
+
+  /// Registra a resposta do cliente pelo sistema. Serve para o caso comum de
+  /// ele responder por telefone ou pessoalmente, sem abrir o link.
+  Future<void> _decideInternally(
+    BuildContext context,
+    WidgetRef ref,
+    Quotation quote,
+    QuotationPublicDecision decision,
+  ) async {
+    final result = await showDialog<({String name, String comments})>(
+      context: context,
+      builder: (_) => _InternalDecisionDialog(decision: decision),
+    );
+    if (result == null || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(quotationRepositoryProvider).decideInternal(
+            quotationId: quote.id,
+            decision: decision,
+            approverName: result.name,
+            comments: result.comments,
+          );
+      ref.invalidate(quotationDetailProvider(quote.id));
+      ref.invalidate(quotationListProvider);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            decision == QuotationPublicDecision.approved
+                ? 'Orçamento aprovado. Já pode gerar a OS.'
+                : 'Resposta registrada.',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is AppError ? e.userMessage : 'Não foi possível registrar.',
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Gera o link público e abre o WhatsApp do cliente com a mensagem pronta,
+  /// para ele mesmo aprovar. Um passo só, em vez de copiar link e colar.
+  Future<void> _sendApprovalWhatsApp(
+    BuildContext context,
+    WidgetRef ref,
+    Quotation quote,
+    String rawPhone,
+    String companyName,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final phone = rawPhone.replaceAll(RegExp(r'\D'), '');
+    if (phone.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Cliente sem telefone cadastrado.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final token = await ref
+          .read(quotationRepositoryProvider)
+          .createPublicLink(quote.id);
+      final link = '${Uri.base.origin}/#${AppRoutes.quotationPublic(token)}';
+      final currency = NumberFormat.simpleCurrency(locale: 'pt_BR');
+      final message = Uri.encodeComponent(
+        'Olá! Segue o orçamento ${quote.displayNumber}'
+        '${companyName.isEmpty ? '' : ' da $companyName'} '
+        'no valor de ${currency.format(quote.totalCents / 100)}.\n\n'
+        'Você pode conferir os itens e aprovar direto por aqui:\n$link',
+      );
+
+      // O número já sai com 55 quando o cadastro tem só DDD + número, mesmo
+      // padrão do painel de mensagens.
+      final target = phone.startsWith('55') ? phone : '55$phone';
+      final uri = Uri.parse('https://wa.me/$target?text=$message');
+      ref.invalidate(quotationDetailProvider(quote.id));
+
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Não foi possível abrir o WhatsApp.')),
+        );
+      }
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível gerar o link agora.'),
         ),
       );
     }
@@ -347,6 +446,49 @@ class QuotationDetailScreen extends ConsumerWidget {
                           icon: const Icon(Icons.link),
                           label: const Text('Copiar link público'),
                         ),
+                        // Aprovação registrada pelo operador: o cliente
+                        // costuma responder por telefone, não pelo link.
+                        if (!quote.status.isTerminal) ...[
+                          FilledButton.icon(
+                            onPressed: () => _decideInternally(
+                              context,
+                              ref,
+                              quote,
+                              QuotationPublicDecision.approved,
+                            ),
+                            icon: const Icon(Icons.verified_outlined),
+                            label: const Text('Aprovar orçamento'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => _decideInternally(
+                              context,
+                              ref,
+                              quote,
+                              QuotationPublicDecision.rejected,
+                            ),
+                            icon: const Icon(Icons.thumb_down_outlined),
+                            label: const Text('Registrar recusa'),
+                          ),
+                          Consumer(builder: (context, ref, _) {
+                            final tenant = ref.watch(currentTenantProvider);
+                            final customerAsync = ref.watch(
+                                customerDetailProvider(quote.customerId));
+                            return customerAsync.maybeWhen(
+                              data: (c) => FilledButton.tonalIcon(
+                                onPressed: () => _sendApprovalWhatsApp(
+                                  context,
+                                  ref,
+                                  quote,
+                                  c.phone ?? '',
+                                  tenant?['name'] as String? ?? '',
+                                ),
+                                icon: const Icon(Icons.chat_outlined),
+                                label: const Text('Aprovar por WhatsApp'),
+                              ),
+                              orElse: () => const SizedBox.shrink(),
+                            );
+                          }),
+                        ],
                         Consumer(builder: (context, ref, _) {
                           final tenant = ref.watch(currentTenantProvider);
                           final customerAsync = ref.watch(
@@ -812,6 +954,83 @@ class _CancelReasonDialogState extends State<_CancelReasonDialog> {
             }
           },
           child: const Text('Confirmar cancelamento'),
+        ),
+      ],
+    );
+  }
+}
+
+
+/// Pede quem respondeu e o comentário antes de registrar a decisão — o
+/// histórico do orçamento fica sem dono se isso não for perguntado.
+class _InternalDecisionDialog extends StatefulWidget {
+  const _InternalDecisionDialog({required this.decision});
+
+  final QuotationPublicDecision decision;
+
+  @override
+  State<_InternalDecisionDialog> createState() =>
+      _InternalDecisionDialogState();
+}
+
+class _InternalDecisionDialogState extends State<_InternalDecisionDialog> {
+  final _nameController = TextEditingController();
+  final _commentsController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _commentsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final approving = widget.decision == QuotationPublicDecision.approved;
+    return AlertDialog(
+      title: Text(approving ? 'Aprovar orçamento' : 'Registrar recusa'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            approving
+                ? 'Use quando o cliente já aprovou por telefone, WhatsApp ou '
+                    'pessoalmente.'
+                : 'Registra que o cliente não quis seguir com a proposta.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _nameController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Quem respondeu',
+              hintText: 'Nome do cliente ou responsável',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _commentsController,
+            minLines: 2,
+            maxLines: 3,
+            decoration: const InputDecoration(labelText: 'Observações'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Voltar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(
+            (
+              name: _nameController.text,
+              comments: _commentsController.text,
+            ),
+          ),
+          child: Text(approving ? 'Aprovar' : 'Registrar'),
         ),
       ],
     );
