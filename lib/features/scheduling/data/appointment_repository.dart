@@ -41,7 +41,7 @@ class AppointmentRepository {
   }) async {
     try {
       var query = _db.from(_table).select(
-            '*, customers(name), service_requests(title), appointment_assignments!inner(technician_user_id, professional_id, revoked_at, profiles(full_name, phone))',
+            '*, customers(name), appointment_assignments!inner(technician_user_id, professional_id, revoked_at, profiles(full_name, phone))',
           );
 
       if (filter.status != null) {
@@ -67,10 +67,11 @@ class AppointmentRepository {
         );
       }
 
-      final rows = await query.order('scheduled_start');
-      return (rows as List<dynamic>)
-          .map((row) => appointmentFromRow(row as Map<String, dynamic>))
+      final rows = (await query.order('scheduled_start') as List<dynamic>)
+          .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
+      await _attachReferenceTitles(rows);
+      return rows.map(appointmentFromRow).toList();
     } on PostgrestException catch (e) {
       throw _mapError(e);
     } catch (e) {
@@ -83,11 +84,13 @@ class AppointmentRepository {
       final row = await _db
           .from(_table)
           .select(
-            '*, customers(name), service_requests(title), appointment_assignments(technician_user_id, professional_id, revoked_at, profiles(full_name, phone))',
+            '*, customers(name), appointment_assignments(technician_user_id, professional_id, revoked_at, profiles(full_name, phone))',
           )
           .eq('id', id)
           .single();
-      return appointmentFromRow(row);
+      final enriched = Map<String, dynamic>.from(row);
+      await _attachReferenceTitles([enriched]);
+      return appointmentFromRow(enriched);
     } on PostgrestException catch (e) {
       if (e.code == 'PGRST116') {
         throw const NotFoundError('Agendamento nao encontrado.');
@@ -95,6 +98,57 @@ class AppointmentRepository {
       throw _mapError(e);
     } catch (e) {
       throw UnexpectedError('Erro ao carregar agendamento.', e.toString());
+    }
+  }
+
+  /// Preenche `service_requests.title` em cada linha.
+  ///
+  /// Não dá para usar embed do PostgREST aqui: `reference_id` aponta para
+  /// `service_requests` **ou** `work_orders` conforme o `kind`, e a 0051
+  /// removeu a FK fixa para `service_requests` justamente por isso. Sem FK o
+  /// PostgREST não infere o relacionamento e responde PGRST200.
+  Future<void> _attachReferenceTitles(List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
+
+    final requestIds = <String>{};
+    final workOrderIds = <String>{};
+    for (final row in rows) {
+      final id = row['reference_id'];
+      if (id is! String) continue;
+      if (row['kind'] == AppointmentKind.workOrder.value) {
+        workOrderIds.add(id);
+      } else {
+        requestIds.add(id);
+      }
+    }
+
+    final titles = <String, String>{};
+
+    if (requestIds.isNotEmpty) {
+      final found = await _db
+          .from('service_requests')
+          .select('id, title')
+          .inFilter('id', requestIds.toList());
+      for (final row in (found as List<dynamic>)) {
+        final map = Map<String, dynamic>.from(row as Map);
+        titles[map['id'] as String] = map['title'] as String? ?? '';
+      }
+    }
+
+    if (workOrderIds.isNotEmpty) {
+      final found = await _db
+          .from('work_orders')
+          .select('id, title')
+          .inFilter('id', workOrderIds.toList());
+      for (final row in (found as List<dynamic>)) {
+        final map = Map<String, dynamic>.from(row as Map);
+        titles[map['id'] as String] = map['title'] as String? ?? '';
+      }
+    }
+
+    for (final row in rows) {
+      final title = titles[row['reference_id']];
+      row['service_requests'] = title == null ? null : {'title': title};
     }
   }
 

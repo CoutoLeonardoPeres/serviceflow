@@ -27,6 +27,15 @@
 -- =============================================================================
 
 -- ── 1. reference_id: FK rigida vira validacao por tipo no trigger ───────────
+--
+-- EFEITO COLATERAL NO POSTGREST: o embed `service_requests(title)` dentro de
+-- um select em `appointments` era resolvido por esta FK. Sem ela, o
+-- relacionamento some do schema cache e a consulta passa a responder
+-- PGRST200 ("could not find a relationship"). O app deixou de usar o embed e
+-- resolve o titulo em consulta separada, por tipo — ver
+-- `AppointmentRepository._attachReferenceTitles`. Um embed aqui nunca foi
+-- correto de qualquer forma: para `kind = 'work_order'` o titulo vem de
+-- `work_orders`, nao de `service_requests`.
 
 ALTER TABLE appointments
   DROP CONSTRAINT IF EXISTS appointments_reference_id_fkey;
