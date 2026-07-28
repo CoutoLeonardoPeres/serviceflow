@@ -39,6 +39,7 @@ precisa **restaurar** a versão antiga da função — não apagá-la.
 | 0058 | — | Todas as funções são novas; o rollback só as apaga junto com os dois triggers. Independente da 0056: os dois triggers de `quotations` não se cruzam. Chamados já fechados continuam fechados |
 | 0059 | — | **Único rollback da série que perde dados**: descarta preços, categorias, histórico e os campos novos de fornecedor e produto. Exporte antes (o arquivo traz os `\copy`). `products.category_id` referencia `material_categories`, então a coluna sai antes da tabela |
 | 0060 | — | Função nova; o rollback só a apaga. Os preços já importados e o histórico com origem `spreadsheet` permanecem. Depende das tabelas da 0059, então rode o rollback de 0060 antes do de 0059 |
+| 0061 | — | Funções e gatilhos novos; o rollback só os apaga. **Reverter reintroduz dois defeitos**: salvar fornecedor/categoria/preço volta a falhar como se fosse permissão, e a empresa volta a poder ficar sem proprietário ativo |
 
 **Armadilha de aridade:** `CREATE OR REPLACE` com número de parâmetros diferente
 **não substitui** — cria uma sobrecarga. As duas versões coexistem e chamadas

@@ -222,8 +222,14 @@ class SettingsScreen extends ConsumerWidget {
                                       if (member.email.isNotEmpty) member.email,
                                       member.roleName,
                                       member.isActive ? 'Ativo' : 'Suspenso',
+                                      if (member.isOwner)
+                                        'não pode ser removido',
                                     ].join(' · '),
                                   ),
+                                  // O dono não tem ação: o banco recusa
+                                  // remover ou rebaixar o último proprietário
+                                  // (0061), e a empresa ficaria sem quem
+                                  // gerencia assinatura e permissões.
                                   trailing: canManagePlan && !member.isOwner
                                       ? OutlinedButton(
                                           onPressed: () async {

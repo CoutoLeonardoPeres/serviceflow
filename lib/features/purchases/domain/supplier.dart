@@ -93,18 +93,23 @@ class Supplier {
     return days == 1 ? '1 dia' : '$days dias';
   }
 
+  /// Documento, telefone e CEP vão sem pontuação.
+  ///
+  /// A máscara é da digitação; guardar "11.222.333/0001-44" faria ele nunca
+  /// casar com "11222333000144" numa busca ou numa importação, e o UNIQUE de
+  /// documento por empresa deixaria passar duplicata só pela formatação.
   Map<String, dynamic> toPayload() => {
         'name': name,
         'trade_name': _orNull(tradeName),
-        'document': _orNull(document),
-        'state_registration': _orNull(stateRegistration),
+        'document': _digitsOrNull(document),
+        'state_registration': _digitsOrNull(stateRegistration),
         'email': _orNull(email),
-        'phone': _orNull(phone),
-        'whatsapp': _orNull(whatsapp),
+        'phone': _digitsOrNull(phone),
+        'whatsapp': _digitsOrNull(whatsapp),
         'website': _orNull(website),
         'contact_name': _orNull(contactName),
         'notes': _orNull(notes),
-        'zip_code': _orNull(zipCode),
+        'zip_code': _digitsOrNull(zipCode),
         'street': _orNull(street),
         'number': _orNull(number),
         'complement': _orNull(complement),
@@ -175,6 +180,12 @@ class Supplier {
 
 String? _orNull(String? value) =>
     (value == null || value.trim().isEmpty) ? null : value.trim();
+
+String? _digitsOrNull(String? value) {
+  if (value == null) return null;
+  final digits = value.replaceAll(RegExp(r'\D'), '');
+  return digits.isEmpty ? null : digits;
+}
 
 Supplier supplierFromRow(Map<String, dynamic> row) {
   final categories = row['supplier_categories'];

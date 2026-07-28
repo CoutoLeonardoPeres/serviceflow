@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_error.dart';
 import '../../../core/location/cep_lookup.dart';
+import '../../../core/utils/input_masks.dart';
 import '../../../core/widgets/app_form_dialog.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/neomorphic.dart';
@@ -231,14 +232,15 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
     final s = widget.supplier;
     _c('name', s?.name);
     _c('tradeName', s?.tradeName);
-    _c('document', s?.document);
+    // O banco guarda só dígitos; a tela mostra formatado.
+    _c('document', s?.document == null ? null : maskDocument(s!.document!));
     _c('stateRegistration', s?.stateRegistration);
     _c('contactName', s?.contactName);
-    _c('phone', s?.phone);
-    _c('whatsapp', s?.whatsapp);
+    _c('phone', s?.phone == null ? null : maskPhone(s!.phone!));
+    _c('whatsapp', s?.whatsapp == null ? null : maskPhone(s!.whatsapp!));
     _c('email', s?.email);
     _c('website', s?.website);
-    _c('zipCode', s?.zipCode);
+    _c('zipCode', s?.zipCode == null ? null : maskCep(s!.zipCode!));
     _c('street', s?.street);
     _c('number', s?.number);
     _c('complement', s?.complement);
@@ -396,15 +398,22 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
                 ),
                 TextFormField(
                   controller: _c('document'),
-                  decoration: const InputDecoration(labelText: 'CNPJ / CPF'),
-                  maxLength: 20,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: const [documentFormatter],
+                  decoration: const InputDecoration(
+                    labelText: 'CNPJ / CPF',
+                    counterText: '',
+                  ),
                 ),
                 TextFormField(
                   controller: _c('stateRegistration'),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: const [stateRegistrationFormatter],
                   decoration: const InputDecoration(
                     labelText: 'Inscrição estadual',
+                    helperText: 'Só números',
+                    counterText: '',
                   ),
-                  maxLength: 20,
                 ),
               ],
             ),
@@ -424,13 +433,21 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
                 ),
                 TextFormField(
                   controller: _c('phone'),
-                  decoration: const InputDecoration(labelText: 'Telefone'),
-                  maxLength: 20,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: const [phoneFormatter],
+                  decoration: const InputDecoration(
+                    labelText: 'Telefone',
+                    counterText: '',
+                  ),
                 ),
                 TextFormField(
                   controller: _c('whatsapp'),
-                  decoration: const InputDecoration(labelText: 'WhatsApp'),
-                  maxLength: 20,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: const [phoneFormatter],
+                  decoration: const InputDecoration(
+                    labelText: 'WhatsApp',
+                    counterText: '',
+                  ),
                 ),
                 AppFormFieldSpan(
                   columns: 2,
@@ -440,10 +457,17 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
                     maxLength: 160,
                   ),
                 ),
-                TextFormField(
-                  controller: _c('website'),
-                  decoration: const InputDecoration(labelText: 'Site'),
-                  maxLength: 200,
+                AppFormFieldSpan(
+                  widthFactor: 1.4,
+                  child: TextFormField(
+                    controller: _c('website'),
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                      labelText: 'Site',
+                      hintText: 'exemplo.com.br',
+                    ),
+                    maxLength: 200,
+                  ),
                 ),
               ],
             ),
@@ -457,7 +481,7 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
                 TextFormField(
                   controller: _c('zipCode'),
                   keyboardType: TextInputType.number,
-                  maxLength: 9,
+                  inputFormatters: const [cepFormatter],
                   decoration: InputDecoration(
                     labelText: 'CEP',
                     helperText: 'Preenche o endereço',

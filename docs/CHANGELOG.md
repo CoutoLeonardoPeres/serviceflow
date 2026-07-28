@@ -1,5 +1,39 @@
 # Changelog
 
+## [Salvar fornecedor, máscaras e proteção do proprietário] — 2026-07-28
+
+### Corrigido
+
+- **"Você não tem permissão para esta operação de compras" ao salvar
+  fornecedor** (migration 0061). A causa não era permissão. `customers`,
+  `service_requests` e as demais tabelas têm um gatilho que faz
+  `NEW.tenant_id := current_tenant_id()`; `suppliers` (0044) nunca teve, e as
+  tabelas do catálogo (0059) repetiram o engano. Sem ele o `tenant_id` chega
+  nulo, a policy compara `NULL = current_tenant_id()`, o resultado é NULL — não
+  TRUE —, o Postgres recusa com 42501 e o app traduz como falta de permissão.
+  O dono da empresa, com todas as permissões, via "você não tem permissão".
+  **Criar fornecedor nunca funcionou desde a 0044.**
+- O mesmo gatilho impede trocar o `tenant_id` de uma linha existente, que
+  moveria o dado para outra empresa.
+
+### Adicionado
+
+- **Máscaras** de CPF/CNPJ, telefone, CEP e inscrição estadual em
+  `core/utils/input_masks.dart`. O documento alterna sozinho entre CPF e CNPJ
+  conforme o número cresce — pedir a escolha antes seria uma pergunta que o
+  próprio número responde. A inscrição estadual só aceita dígitos e **não**
+  ganha separador: cada estado tem um formato, e inventar um daria número
+  errado em metade deles. O que vai ao banco é sempre o número limpo; guardar
+  pontuação faria "11.222.333/0001-44" e "11222333000144" serem documentos
+  diferentes na busca e no UNIQUE por empresa.
+- **Proteção do proprietário** (migration 0061): a empresa não pode ficar sem
+  um `tenant_owner` ativo. Remover, rebaixar ou suspender o último é recusado
+  pelo banco — vale inclusive para o próprio dono, porque tirar o próprio
+  acesso por engano é o jeito mais comum de uma empresa ficar órfã. A linha do
+  dono na tela de membros agora diz "não pode ser removido" em vez de
+  simplesmente não ter botão.
+- Campo **Site** 40% mais largo.
+
 ## [CEP no fornecedor e correção de acentos] — 2026-07-28
 
 ### Adicionado
