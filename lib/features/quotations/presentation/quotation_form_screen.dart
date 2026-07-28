@@ -48,8 +48,8 @@ final _quoteProfessionalsProvider =
   return result.where((professional) => professional.isActive).toList();
 });
 
-/// Nome de quem atendeu o chamado — vira o valor inicial da coluna
-/// profissional, e continua editável linha a linha.
+/// Id do profissional que atendeu o chamado — vira o valor inicial da coluna
+/// profissional, e continua trocável linha a linha.
 final _requestTechnicianProvider =
     FutureProvider.autoDispose.family<String?, String>((ref, requestId) async {
   final appointments = await ref.read(appointmentRepositoryProvider).list(
@@ -58,7 +58,7 @@ final _requestTechnicianProvider =
   for (final appointment in appointments) {
     if (appointment.status == AppointmentStatus.cancelled) continue;
     if (appointment.technicians.isNotEmpty) {
-      return appointment.technicians.first.name;
+      return appointment.technicians.first.professionalId;
     }
   }
   return null;
@@ -103,6 +103,10 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   /// Cliente para o qual o chamado já foi escolhido sozinho — evita repetir a
   /// seleção depois que o usuário limpar o campo de propósito.
   String? _autoPickedRequestFor;
+
+  /// Profissionais cujas despesas já foram lançadas — evita duplicar a cada
+  /// nova linha de serviço com a mesma pessoa.
+  final Set<String> _expenseAppliedFor = {};
 
   /// Escolher o cliente já traz o chamado dele quando só existe um em aberto.
   /// Sem isso o campo continuava vazio: o Autocomplete não abre a lista com o
@@ -213,22 +217,96 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     });
   }
 
+  /// Escolher o profissional traz o valor da hora dele para a linha e, na
+  /// primeira vez, lança as despesas cadastradas (transporte, refeição,
+  /// deslocamento, hospedagem, outros). Tudo continua editável.
+  void _pickProfessional(
+    _QuoteLine line,
+    String? professionalId,
+    List<ServiceProfessional> people,
+  ) {
+    final professional = professionalId == null
+        ? null
+        : people.cast<ServiceProfessional?>().firstWhere(
+              (item) => item?.id == professionalId,
+              orElse: () => null,
+            );
+
+    setState(() {
+      line.professionalId = professional?.id;
+      line.professionalName = professional?.name;
+      if (professional == null) return;
+
+      // Não sobrescreve valor já digitado — só preenche o que está em branco.
+      if (professional.hourlyRateCents > 0) {
+        if (line.priceCtrl.text.trim().isEmpty) {
+          line.priceCtrl.text = _centsToInput(professional.hourlyRateCents);
+        }
+        if (line.costCtrl.text.trim().isEmpty) {
+          line.costCtrl.text = _centsToInput(professional.hourlyRateCents);
+        }
+      }
+      if (line.descriptionCtrl.text.trim().isEmpty &&
+          line.kind == QuotationItemKind.laborHour) {
+        line.descriptionCtrl.text = 'Hora técnica — ${professional.name}';
+      }
+      _applyProfessionalExpenses(professional);
+    });
+  }
+
+  /// Lança as despesas do profissional no card de despesas extras, uma vez por
+  /// profissional. Só ocupa linhas em branco; não mexe no que já foi digitado.
+  void _applyProfessionalExpenses(ServiceProfessional professional) {
+    if (!_expenseAppliedFor.add(professional.id)) return;
+
+    final expenses = <(String, int, QuotationItemKind)>[
+      ('Transporte', professional.transportCostCents, QuotationItemKind.travel),
+      ('Refeição', professional.mealCostCents, QuotationItemKind.other),
+      (
+        'Deslocamento',
+        professional.travelCostCents,
+        QuotationItemKind.travel,
+      ),
+      ('Hospedagem', professional.lodgingCostCents, QuotationItemKind.other),
+      ('Outros custos', professional.otherCostCents, QuotationItemKind.other),
+    ].where((expense) => expense.$2 > 0);
+
+    for (final (label, cents, kind) in expenses) {
+      final line = _expenseLines.firstWhere(
+        (candidate) => !candidate.isFilled && candidate.isBlank,
+        orElse: () {
+          final created = _QuoteLine(kind);
+          _expenseLines.add(created);
+          return created;
+        },
+      );
+      line.kind = kind;
+      line.professionalId = professional.id;
+      line.professionalName = professional.name;
+      line.descriptionCtrl.text = '$label — ${professional.name}';
+      line.quantityCtrl.text = '1';
+      line.priceCtrl.text = _centsToInput(cents);
+      line.costCtrl.text = _centsToInput(cents);
+    }
+  }
+
   /// Preenche o profissional das linhas de serviço ainda em branco com quem
   /// atendeu o chamado. Não sobrescreve o que o usuário já escolheu.
-  void _applyRequestTechnician(String? name) {
-    if (name == null || name.isEmpty) return;
-    var changed = false;
-    for (final line in _serviceLines) {
-      if (line.professional == null) {
-        line.professional = name;
-        changed = true;
+  void _applyRequestTechnician(
+    String? professionalId,
+    List<ServiceProfessional> people,
+  ) {
+    if (professionalId == null || professionalId.isEmpty) return;
+    if (_serviceLines.every((line) => line.professionalId != null)) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      for (final line in _serviceLines) {
+        if (line.professionalId == null) {
+          _pickProfessional(line, professionalId, people);
+        }
       }
-    }
-    if (changed && mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() {});
-      });
-    }
+    });
   }
 
   Future<void> _pickValidUntil() async {
@@ -409,9 +487,12 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             builder: (_) {
               final request = _request;
               if (request != null) {
-                ref
-                    .watch(_requestTechnicianProvider(request.id))
-                    .whenData(_applyRequestTechnician);
+                final people = ref.watch(_quoteProfessionalsProvider).value;
+                if (people != null) {
+                  ref
+                      .watch(_requestTechnicianProvider(request.id))
+                      .whenData((id) => _applyRequestTechnician(id, people));
+                }
               }
               return const SizedBox.shrink();
             },
@@ -435,6 +516,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   enabled: !isLoading,
                   subtotalCents: _subtotalOf(_serviceLines),
                   onChanged: () => setState(() {}),
+                  onPickProfessional: (line, id) =>
+                      _pickProfessional(line, id, people),
                   onAdd: () =>
                       _addLine(_serviceLines, QuotationItemKind.service),
                   onRemove: (index) => _removeLine(
@@ -457,6 +540,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   enabled: !isLoading,
                   subtotalCents: _subtotalOf(_materialLines),
                   onChanged: () => setState(() {}),
+                  onPickProfessional: (line, id) =>
+                      _pickProfessional(line, id, people),
                   onAdd: () =>
                       _addLine(_materialLines, QuotationItemKind.material),
                   onRemove: (index) => _removeLine(
@@ -480,6 +565,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   enabled: !isLoading,
                   subtotalCents: _subtotalOf(_expenseLines),
                   onChanged: () => setState(() {}),
+                  onPickProfessional: (line, id) =>
+                      _pickProfessional(line, id, people),
                   onAdd: () =>
                       _addLine(_expenseLines, QuotationItemKind.travel),
                   onRemove: (index) => _removeLine(
@@ -607,7 +694,17 @@ class _QuoteLine {
   final priceCtrl = TextEditingController();
   final costCtrl = TextEditingController();
   QuotationItemKind kind;
-  String? professional;
+
+  /// Guarda o id (e não só o nome) para conseguir puxar hora e despesas do
+  /// cadastro do profissional.
+  String? professionalId;
+  String? professionalName;
+
+  /// Linha ainda intocada: serve para reaproveitar antes de criar outra.
+  bool get isBlank =>
+      descriptionCtrl.text.trim().isEmpty &&
+      priceCtrl.text.trim().isEmpty &&
+      costCtrl.text.trim().isEmpty;
 
   bool get isFilled =>
       descriptionCtrl.text.trim().length >= 3 &&
@@ -621,7 +718,7 @@ class _QuoteLine {
 
   QuotationDraftItem toItem() {
     final description = descriptionCtrl.text.trim();
-    final who = professional?.trim() ?? '';
+    final who = professionalName?.trim() ?? '';
     return QuotationDraftItem(
       kind: kind,
       // O profissional vira prefixo da descrição: o item de orçamento não tem
@@ -656,6 +753,7 @@ class _LinesCard extends StatelessWidget {
     required this.onChanged,
     required this.onAdd,
     required this.onRemove,
+    required this.onPickProfessional,
     this.helper,
   });
 
@@ -671,6 +769,8 @@ class _LinesCard extends StatelessWidget {
   final VoidCallback onChanged;
   final VoidCallback onAdd;
   final ValueChanged<int> onRemove;
+  final void Function(_QuoteLine line, String? professionalId)
+      onPickProfessional;
 
   @override
   Widget build(BuildContext context) {
@@ -692,6 +792,7 @@ class _LinesCard extends StatelessWidget {
             enabled: enabled,
             onChanged: onChanged,
             onRemove: onRemove,
+            onPickProfessional: onPickProfessional,
           ),
           const SizedBox(height: 12),
           Row(
@@ -754,9 +855,14 @@ class _LinesSpreadsheet extends StatelessWidget {
     required this.enabled,
     required this.onChanged,
     required this.onRemove,
+    required this.onPickProfessional,
   });
 
   final List<_QuoteLine> lines;
+
+  /// Escolher o profissional puxa hora e despesas do cadastro dele.
+  final void Function(_QuoteLine line, String? professionalId)
+      onPickProfessional;
 
   /// Tipos oferecidos nesta grade. Material não aparece no card de serviço.
   final List<QuotationItemKind> kinds;
@@ -886,21 +992,18 @@ class _LinesSpreadsheet extends StatelessWidget {
                               value: null,
                               child: Text('—'),
                             ),
-                            ..._professionalNames.map(
-                              (name) => DropdownMenuItem(
-                                value: name,
+                            ...professionals.map(
+                              (professional) => DropdownMenuItem(
+                                value: professional.id,
                                 child: Text(
-                                  name,
+                                  professional.name,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ),
                           ],
                           onChanged: enabled
-                              ? (value) {
-                                  line.professional = value;
-                                  onChanged();
-                                }
+                              ? (value) => onPickProfessional(line, value)
                               : null,
                         ),
                       ),
@@ -980,17 +1083,12 @@ class _LinesSpreadsheet extends StatelessWidget {
     );
   }
 
-  List<String> get _professionalNames {
-    final names = professionals.map((p) => p.name).toSet().toList()..sort();
-    return names;
-  }
-
-  /// Um profissional que saiu do cadastro ainda precisa aparecer na linha que
-  /// já o referencia, senão o dropdown estoura por valor fora da lista.
+  /// Um profissional inativado depois de escolhido sai da lista; sem isso o
+  /// dropdown estoura por valor fora das opções.
   String? _professionalValue(_QuoteLine line) {
-    final current = line.professional;
-    if (current == null || _professionalNames.contains(current)) return current;
-    return null;
+    final current = line.professionalId;
+    if (current == null) return null;
+    return professionals.any((p) => p.id == current) ? current : null;
   }
 
   static const _cellDecoration = InputDecoration(
@@ -1111,6 +1209,10 @@ class _RequestSearchField extends StatelessWidget {
     );
   }
 }
+
+/// Centavos para o formato que `_moneyToCents` lê de volta (1234 -> "12,34").
+String _centsToInput(int cents) =>
+    (cents / 100).toStringAsFixed(2).replaceAll('.', ',');
 
 int _moneyToCents(String value) {
   final normalized = value
