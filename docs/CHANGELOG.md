@@ -1,5 +1,41 @@
 # Changelog
 
+## [F7-P2 — Importação da tabela de preços por planilha] — 2026-07-28
+
+Segunda fase do módulo de materiais (migration 0060).
+
+### Adicionado
+
+- **Modelo de planilha para o fornecedor**, baixável na tela: código do
+  fornecedor, produto, unidade, categoria, marca, código de barras, preço,
+  embalagem, quantidade mínima e validade. O modelo já vem com uma linha de
+  exemplo — planilha só com cabeçalho gera dúvida sobre formato de data e
+  decimal, e a dúvida volta como arquivo mal preenchido.
+- **Importação com prévia** antes de confirmar: quantas linhas entram, quais
+  serão recusadas e por quê, com o número da linha como o operador vê no
+  Excel. Preço errado só aparece na proposta do cliente — e aí já foi.
+- **`import_supplier_prices`** roda o upsert inteiro no banco, numa transação
+  só. Mexe em `products` e `supplier_products` por linha; em laço de HTTP, uma
+  queda no meio deixaria metade da tabela nova e metade velha.
+- **Casamento em quatro níveis**: vínculo existente pelo código do fornecedor,
+  código de barras, nome exato (ignorando caixa) e, por último, criação. Sem
+  isso, reimportar a mesma planilha criaria produto duplicado todo mês.
+- **Resumo separa "atualizado" de "sem mudança"**: fornecedor que reenvia a
+  mesma tabela vê "300 sem mudança", não "300 atualizados" — a segunda leitura
+  esconderia que a tabela nova não chegou.
+- Preço importado entra no histórico com origem `spreadsheet`.
+
+### Notas
+
+- **Formato: CSV.** O parser aceita o que o Excel em português realmente faz —
+  ponto e vírgula, vírgula decimal, BOM, CRLF, Latin-1 e campo entre aspas com
+  vírgula dentro. Para `.xlsx`, o fornecedor (ou você) usa "Salvar como → CSV";
+  incluir um parser de xlsx custaria uma dependência pesada para um passo que
+  o Excel faz em dois cliques. Se essa fricção incomodar na prática, dá para
+  adicionar depois.
+- `downloadTextFile` saiu de `features/reports` para `core/files`: baixar
+  arquivo gerado é capacidade de app, não de relatório.
+
 ## [F7-P1 — Catálogo de materiais, fornecedores e preços] — 2026-07-28
 
 Primeira das três fases do módulo de materiais (migration 0059).

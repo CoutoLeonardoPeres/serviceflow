@@ -11,7 +11,7 @@ import '../../../core/widgets/neomorphic.dart';
 import '../application/reports_notifier.dart';
 import '../domain/reports_csv_export.dart';
 import '../domain/reports_snapshot.dart';
-import 'text_file_download.dart';
+import '../../../core/files/text_file_download.dart';
 
 enum _ReportDetailFilter {
   all('Todos'),

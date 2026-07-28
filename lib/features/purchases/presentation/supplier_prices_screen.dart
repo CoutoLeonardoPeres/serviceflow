@@ -12,6 +12,7 @@ import '../../stock/domain/product.dart';
 import '../application/purchase_notifier.dart';
 import '../domain/material_catalog.dart';
 import '../domain/supplier.dart';
+import 'price_import_screen.dart';
 
 /// Tabela de preços de um fornecedor.
 ///
@@ -31,6 +32,17 @@ class SupplierPricesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('Preços · ${supplier.displayName}'),
+        actions: [
+          IconButton(
+            tooltip: 'Importar planilha',
+            icon: const Icon(Icons.upload_file_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => PriceImportScreen(supplier: supplier),
+              ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(context, ref),

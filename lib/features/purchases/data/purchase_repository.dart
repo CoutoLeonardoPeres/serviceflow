@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/error/app_error.dart';
 import '../domain/purchase_order.dart';
 import '../domain/material_catalog.dart';
+import '../domain/price_sheet.dart';
+import '../domain/price_import_result.dart';
 import '../domain/supplier.dart';
 
 /// Acesso a fornecedores e pedidos de compra.
@@ -229,6 +231,33 @@ class PurchaseRepository {
           .cast<Map<String, dynamic>>()
           .map(bestPriceOptionFromRow)
           .toList();
+    } on PostgrestException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  /// Importa a tabela de precos do fornecedor.
+  ///
+  /// O upsert roda inteiro no banco (RPC da 0060): mexe em `products` e
+  /// `supplier_products` por linha e precisa ser tudo ou nada. Em laco de
+  /// HTTP, uma queda no meio deixaria metade da tabela nova e metade velha.
+  Future<PriceImportResult> importSupplierPrices({
+    required String supplierId,
+    required List<PriceSheetRow> rows,
+    bool createMissing = true,
+  }) async {
+    try {
+      final result = await _db.rpc(
+        'import_supplier_prices',
+        params: {
+          'p_supplier_id': supplierId,
+          'p_rows': rows.map((r) => r.toPayload()).toList(),
+          'p_create_missing': createMissing,
+        },
+      );
+      return priceImportResultFromJson(
+        Map<String, dynamic>.from(result as Map),
+      );
     } on PostgrestException catch (e) {
       throw _mapError(e);
     }
