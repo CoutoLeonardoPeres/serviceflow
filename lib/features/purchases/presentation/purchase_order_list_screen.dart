@@ -22,10 +22,15 @@ class PurchaseOrderListScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Compras'),
         actions: [
-          IconButton(
-            tooltip: 'Fornecedores',
-            icon: const Icon(Icons.local_shipping_outlined),
-            onPressed: () => context.push(AppRoutes.suppliers),
+          // Ícone sem rótulo escondia o cadastro de fornecedores — que é a
+          // porta de entrada do catálogo de materiais e da tabela de preços.
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: OutlinedButton.icon(
+              onPressed: () => context.push(AppRoutes.suppliers),
+              icon: const Icon(Icons.local_shipping_outlined),
+              label: const Text('Fornecedores'),
+            ),
           ),
         ],
       ),

@@ -99,6 +99,15 @@ const _destinations = [
     label: 'Compras',
     feature: TenantFeature.stock,
   ),
+  // Cadastro de fornecedor, categorias de material e tabela de preços moram
+  // aqui. Estava só como ícone dentro de Compras e ninguém achava.
+  _NavDestination(
+    route: AppRoutes.suppliers,
+    icon: Icons.local_shipping_outlined,
+    selectedIcon: Icons.local_shipping,
+    label: 'Fornecedores',
+    feature: TenantFeature.stock,
+  ),
   _NavDestination(
     route: AppRoutes.financials,
     icon: Icons.account_balance_wallet_outlined,
