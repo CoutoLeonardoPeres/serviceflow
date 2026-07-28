@@ -259,6 +259,21 @@ class AppointmentRepository {
     if (e.code == '42501' || e.code == 'insufficient_privilege') {
       return const PermissionError('Voce nao tem permissao para esta agenda.');
     }
+    // Coluna/relacionamento/função que o app usa e o banco não tem: o schema
+    // está atrás do código. Sem esta ramificação vira "operação falhou, tente
+    // novamente" — e tentar de novo nunca resolve.
+    if (e.code == '42703' || // coluna inexistente
+        e.code == '42883' || // função inexistente
+        e.code == 'PGRST200' || // relacionamento não encontrado
+        e.code == 'PGRST202' || // RPC não encontrada
+        e.code == 'PGRST203') {
+      // RPC ambígua (dois overloads)
+      return BusinessRuleError(
+        'A agenda depende de uma atualização de banco que ainda não foi '
+        'aplicada. Rode as migrations pendentes (supabase db push). '
+        'Detalhe: ${e.code} ${e.message}',
+      );
+    }
     if (e.code == '23P01' || e.code == '23514' || e.code == 'P0001') {
       // As RPCs de agenda levantam check_violation com mensagem pronta para o
       // usuário ("já possui atendimento neste período", "precisa de ao menos
