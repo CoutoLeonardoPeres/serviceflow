@@ -216,7 +216,7 @@ class _TemplateCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceVariant,
+                    color: theme.colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text('Inativo',
@@ -358,7 +358,7 @@ class _TemplateFormState extends ConsumerState<_TemplateForm> {
                       (v?.trim().isEmpty ?? true) ? 'Informe um nome.' : null,
                 ),
                 DropdownButtonFormField<MessageChannel>(
-                  value: _channel,
+                  initialValue: _channel,
                   decoration: const InputDecoration(labelText: 'Canal *'),
                   items: [
                     MessageChannel.whatsapp,

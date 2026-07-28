@@ -192,7 +192,7 @@ class _AuditEventCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: entityColor.withOpacity(0.12),
+              color: entityColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -221,7 +221,7 @@ class _AuditEventCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: entityColor.withOpacity(0.10),
+                        color: entityColor.withValues(alpha: 0.10),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

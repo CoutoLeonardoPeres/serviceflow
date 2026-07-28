@@ -58,11 +58,15 @@ void main() {
         createdBy: 'user-001',
       );
 
-      final params = appointment.toScheduleParams('tech-001');
+      final params = appointment.toScheduleParams(
+        professionalId: 'prof-001',
+        technicianUserId: 'tech-001',
+      );
 
       expect(params['p_kind'], 'visit');
       expect(params['p_reference_id'], 'sr-001');
       expect(params['p_customer_id'], 'customer-001');
+      expect(params['p_professional_id'], 'prof-001');
       expect(params['p_technician_user_id'], 'tech-001');
       expect(params.containsKey('tenant_id'), isFalse);
       expect(params.containsKey('created_by'), isFalse);

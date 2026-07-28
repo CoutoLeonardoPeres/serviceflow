@@ -1451,16 +1451,3 @@ String _availabilitySummary(Map<String, DaySchedule> schedule) {
   return activeDays == 0 ? 'sem disponibilidade' : '$activeDays dias ativos';
 }
 
-String _billingStatusLabel(String status) {
-  switch (status) {
-    case 'trialing':
-      return 'Trial ativo';
-    case 'past_due':
-      return 'Pagamento pendente';
-    case 'canceled':
-      return 'Assinatura cancelada';
-    case 'active':
-    default:
-      return 'Assinatura ativa';
-  }
-}

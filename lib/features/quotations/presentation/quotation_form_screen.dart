@@ -15,6 +15,7 @@ import '../../customers/domain/customer_search.dart';
 import '../../customers/presentation/widgets/customer_search_field.dart';
 import '../../professionals/application/service_professional_list_notifier.dart';
 import '../../professionals/domain/service_professional.dart';
+import '../../scheduling/application/appointment_list_notifier.dart';
 import '../../scheduling/data/appointment_repository.dart';
 import '../../scheduling/domain/appointment.dart';
 import '../../service_requests/application/service_request_list_notifier.dart';

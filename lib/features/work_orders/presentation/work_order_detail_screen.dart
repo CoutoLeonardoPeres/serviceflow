@@ -569,7 +569,7 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                         color: Theme.of(context)
                             .colorScheme
                             .errorContainer
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -622,7 +622,7 @@ class WorkOrderDetailScreen extends ConsumerWidget {
                                           color: Theme.of(context)
                                               .colorScheme
                                               .onErrorContainer
-                                              .withOpacity(0.7),
+                                              .withValues(alpha: 0.7),
                                         ),
                                   ),
                               ],
