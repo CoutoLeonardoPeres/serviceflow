@@ -45,7 +45,7 @@ class QuotationPdfGenerator {
     document.addPage(
       pw.MultiPage(
         pageTheme: pw.PageTheme(
-          margin: const pw.EdgeInsets.all(32),
+          margin: const pw.EdgeInsets.all(24),
           theme: pw.ThemeData.withFont(
             base: regularFont,
             bold: boldFont,
@@ -66,7 +66,7 @@ class QuotationPdfGenerator {
         ),
         build: (context) => [
           pw.Container(
-            padding: const pw.EdgeInsets.all(22),
+            padding: const pw.EdgeInsets.all(10),
             decoration: pw.BoxDecoration(
               color: panel,
               borderRadius: pw.BorderRadius.circular(18),
@@ -79,8 +79,8 @@ class QuotationPdfGenerator {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Container(
-                      width: 44,
-                      height: 44,
+                      width: 34,
+                      height: 34,
                       decoration: pw.BoxDecoration(
                         color: accent,
                         borderRadius: pw.BorderRadius.circular(12),
@@ -91,7 +91,7 @@ class QuotationPdfGenerator {
                         style: pw.TextStyle(
                           color: PdfColors.white,
                           fontWeight: pw.FontWeight.bold,
-                          fontSize: 16,
+                          fontSize: 12,
                         ),
                       ),
                     ),
@@ -105,13 +105,13 @@ class QuotationPdfGenerator {
                             style: pw.TextStyle(
                               color: ink,
                               fontWeight: pw.FontWeight.bold,
-                              fontSize: 24,
+                              fontSize: 19,
                             ),
                           ),
                           pw.SizedBox(height: 3),
                           pw.Text(
                             'Orçamento ${quote.displayNumber}',
-                            style: pw.TextStyle(color: muted, fontSize: 11),
+                            style: pw.TextStyle(color: muted, fontSize: 9),
                           ),
                         ],
                       ),
@@ -119,7 +119,7 @@ class QuotationPdfGenerator {
                     _StatusPill(label: quote.status.label, color: accent),
                   ],
                 ),
-                pw.SizedBox(height: 24),
+                pw.SizedBox(height: 14),
                 pw.Row(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
@@ -145,33 +145,33 @@ class QuotationPdfGenerator {
               ],
             ),
           ),
-          pw.SizedBox(height: 22),
+          pw.SizedBox(height: 12),
           pw.Text(
             'Itens do orçamento',
             style: pw.TextStyle(
               color: ink,
               fontWeight: pw.FontWeight.bold,
-              fontSize: 16,
+              fontSize: 12,
             ),
           ),
-          pw.SizedBox(height: 10),
+          pw.SizedBox(height: 7),
           if (items.isEmpty)
             pw.Text(
               'Nenhum item detalhado neste orçamento.',
-              style: pw.TextStyle(color: muted, fontSize: 11),
+              style: pw.TextStyle(color: muted, fontSize: 9),
             )
           else
             ..._itemGroups(items, currency, ink, muted, accent),
-          pw.SizedBox(height: 22),
+          pw.SizedBox(height: 12),
           pw.Text(
             'Resumo financeiro',
             style: pw.TextStyle(
               color: ink,
               fontWeight: pw.FontWeight.bold,
-              fontSize: 16,
+              fontSize: 12,
             ),
           ),
-          pw.SizedBox(height: 10),
+          pw.SizedBox(height: 7),
           pw.Table(
             border: pw.TableBorder.all(color: PdfColor.fromHex('#D7DFEA')),
             columnWidths: const {
@@ -193,19 +193,19 @@ class QuotationPdfGenerator {
             ],
           ),
           if ((quote.notes ?? '').trim().isNotEmpty) ...[
-            pw.SizedBox(height: 22),
+            pw.SizedBox(height: 12),
             pw.Text(
               'Observações',
               style: pw.TextStyle(
                 color: ink,
                 fontWeight: pw.FontWeight.bold,
-                fontSize: 16,
+                fontSize: 12,
               ),
             ),
-            pw.SizedBox(height: 8),
+            pw.SizedBox(height: 6),
             pw.Container(
               width: double.infinity,
-              padding: const pw.EdgeInsets.all(14),
+              padding: const pw.EdgeInsets.all(10),
               decoration: pw.BoxDecoration(
                 color: PdfColor.fromHex('#F7FAFD'),
                 borderRadius: pw.BorderRadius.circular(12),
@@ -213,13 +213,13 @@ class QuotationPdfGenerator {
               ),
               child: pw.Text(
                 quote.notes!.trim(),
-                style: pw.TextStyle(color: ink, fontSize: 11, lineSpacing: 3),
+                style: pw.TextStyle(color: ink, fontSize: 9, lineSpacing: 2),
               ),
             ),
           ],
-          pw.SizedBox(height: 28),
+          pw.SizedBox(height: 16),
           pw.Container(
-            padding: const pw.EdgeInsets.all(14),
+            padding: const pw.EdgeInsets.all(10),
             decoration: pw.BoxDecoration(
               color: PdfColor.fromHex('#F7FAFD'),
               borderRadius: pw.BorderRadius.circular(12),
@@ -285,7 +285,7 @@ class _InfoBlock extends pw.StatelessWidget {
   @override
   pw.Widget build(pw.Context context) {
     return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
+      padding: const pw.EdgeInsets.all(8),
       decoration: pw.BoxDecoration(
         color: PdfColors.white,
         borderRadius: pw.BorderRadius.circular(12),
@@ -306,7 +306,7 @@ class _InfoBlock extends pw.StatelessWidget {
             style: pw.TextStyle(
               color: PdfColor.fromHex('#2F3A46'),
               fontWeight: pw.FontWeight.bold,
-              fontSize: 12,
+              fontSize: 11,
             ),
           ),
           if (subtitle != null) ...[
@@ -358,7 +358,7 @@ List<pw.Widget> _itemGroups(
         group.fold<int>(0, (sum, item) => sum + item.totalCents);
 
     widgets.addAll([
-      pw.SizedBox(height: 10),
+      pw.SizedBox(height: 7),
       pw.Text(
         title,
         style: pw.TextStyle(
@@ -436,13 +436,13 @@ pw.Widget _cell(
   pw.TextAlign align = pw.TextAlign.left,
 }) =>
     pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       child: pw.Text(
         text,
         textAlign: align,
         style: pw.TextStyle(
           color: color,
-          fontSize: 10,
+          fontSize: 8,
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
         ),
       ),
@@ -462,7 +462,7 @@ class _MoneyRow extends pw.TableRow {
           ),
           children: [
             pw.Padding(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               child: pw.Text(
                 label,
                 style: pw.TextStyle(
@@ -473,7 +473,7 @@ class _MoneyRow extends pw.TableRow {
               ),
             ),
             pw.Padding(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               child: pw.Align(
                 alignment: pw.Alignment.centerRight,
                 child: pw.Text(
