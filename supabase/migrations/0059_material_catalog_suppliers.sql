@@ -24,6 +24,11 @@
 --   supplier_products — o preco daquele fornecedor para aquele produto, com o
 --     codigo dele (que e o que vem na planilha) e a validade da tabela.
 --
+-- REAPLICAVEL: toda a migration pode rodar duas vezes sem erro. `CREATE
+-- POLICY` nao aceita `IF NOT EXISTS` no Postgres, entao cada uma e precedida
+-- de `DROP POLICY IF EXISTS`. Sem isso, uma reexecucao morre em
+-- "policy already exists" no meio do arquivo.
+--
 -- REPASSE (escolha do usuario: padrao global + excecoes): o markup vive em
 -- tres niveis, do mais especifico para o mais geral — produto, categoria,
 -- empresa. Quem cadastra 500 itens nao preenche 500 margens; quem precisa
@@ -50,8 +55,10 @@ CREATE INDEX IF NOT EXISTS idx_material_categories_tenant
 
 ALTER TABLE material_categories ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "material_categories_select" ON material_categories;
 CREATE POLICY "material_categories_select" ON material_categories
   FOR SELECT USING (tenant_id = current_tenant_id());
+DROP POLICY IF EXISTS "material_categories_write" ON material_categories;
 CREATE POLICY "material_categories_write" ON material_categories
   FOR ALL USING (
     tenant_id = current_tenant_id() AND has_permission('stock.write')
@@ -120,8 +127,10 @@ CREATE INDEX IF NOT EXISTS idx_supplier_categories_category
 
 ALTER TABLE supplier_categories ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "supplier_categories_select" ON supplier_categories;
 CREATE POLICY "supplier_categories_select" ON supplier_categories
   FOR SELECT USING (tenant_id = current_tenant_id());
+DROP POLICY IF EXISTS "supplier_categories_write" ON supplier_categories;
 CREATE POLICY "supplier_categories_write" ON supplier_categories
   FOR ALL USING (
     tenant_id = current_tenant_id() AND has_permission('purchases.write')
@@ -158,8 +167,10 @@ CREATE INDEX IF NOT EXISTS idx_supplier_products_product
 
 ALTER TABLE supplier_products ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "supplier_products_select" ON supplier_products;
 CREATE POLICY "supplier_products_select" ON supplier_products
   FOR SELECT USING (tenant_id = current_tenant_id());
+DROP POLICY IF EXISTS "supplier_products_write" ON supplier_products;
 CREATE POLICY "supplier_products_write" ON supplier_products
   FOR ALL USING (
     tenant_id = current_tenant_id() AND has_permission('purchases.write')
@@ -186,8 +197,10 @@ CREATE INDEX IF NOT EXISTS idx_supplier_price_history_item
 
 ALTER TABLE supplier_price_history ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "supplier_price_history_select" ON supplier_price_history;
 CREATE POLICY "supplier_price_history_select" ON supplier_price_history
   FOR SELECT USING (tenant_id = current_tenant_id());
+DROP POLICY IF EXISTS "supplier_price_history_insert" ON supplier_price_history;
 CREATE POLICY "supplier_price_history_insert" ON supplier_price_history
   FOR INSERT WITH CHECK (
     tenant_id = current_tenant_id() AND has_permission('purchases.write')

@@ -426,6 +426,7 @@ $$;
 
 ALTER TABLE appointment_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "appointment_events_select" ON appointment_events;
 CREATE POLICY "appointment_events_select" ON appointment_events
   FOR SELECT TO authenticated
   USING (tenant_id = current_tenant_id() AND has_permission('appointments.read'));
