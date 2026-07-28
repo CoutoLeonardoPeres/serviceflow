@@ -324,12 +324,16 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
     final theme = Theme.of(context);
     final categoriesAsync = ref.watch(materialCategoriesProvider);
 
-    return Form(
-      key: _formKey,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    // O diálogo limita a altura em 760 e NÃO rola sozinho — quem rola é cada
+    // formulário. Com cinco seções, sem isto o conteúdo estoura por ~800px.
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           AppFormSection(
             title: 'Identificação',
             icon: Icons.badge_outlined,
@@ -599,10 +603,11 @@ class _SupplierFormState extends ConsumerState<_SupplierForm> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Text('Salvar'),
-              ),
-            ],
-          ),
-        ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

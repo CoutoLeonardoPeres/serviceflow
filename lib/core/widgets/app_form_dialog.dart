@@ -2,6 +2,16 @@ import 'package:flutter/material.dart';
 
 import 'neomorphic.dart';
 
+/// Diálogo de formulário com cabeçalho e botão de fechar.
+///
+/// **O conteúdo NÃO rola sozinho.** A altura é limitada em 760px e o `child`
+/// entra num `Flexible`, então formulário mais alto que isso estoura com
+/// "BOTTOM OVERFLOWED BY N PIXELS". Formulário longo precisa se envolver em
+/// `SingleChildScrollView` — veja `_SupplierForm` ou os formulários da OS.
+///
+/// O scroll não fica aqui de propósito: vários filhos usam `Expanded` e
+/// `ListView` (calendário do dia, transferência de estoque, movimentos), que
+/// quebram sob altura ilimitada.
 Future<T?> showAppFormDialog<T>({
   required BuildContext context,
   required String title,

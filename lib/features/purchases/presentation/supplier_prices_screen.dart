@@ -300,12 +300,15 @@ class _PriceFormState extends ConsumerState<_PriceForm> {
     final theme = Theme.of(context);
     final productsAsync = ref.watch(productsProvider);
 
-    return Form(
-      key: _formKey,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    // Mesmo motivo do formulário de fornecedor: o diálogo não rola sozinho.
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           AppFormSection(
             title: 'Item da tabela',
             icon: Icons.sell_outlined,
@@ -433,10 +436,11 @@ class _PriceFormState extends ConsumerState<_PriceForm> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Text('Salvar'),
-              ),
-            ],
-          ),
-        ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
