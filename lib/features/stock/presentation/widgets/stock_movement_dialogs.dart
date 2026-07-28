@@ -244,6 +244,7 @@ class _StockMovementFormState extends ConsumerState<_StockMovementForm> {
                   products.where((p) => p.id == _productId).firstOrNull;
               _trackingType = selected?.trackingType ?? ProductTrackingType.none;
               return DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _productId,
                 decoration: const InputDecoration(labelText: 'Produto *'),
                 items: products
@@ -267,6 +268,7 @@ class _StockMovementFormState extends ConsumerState<_StockMovementForm> {
             data: (warehouses) {
               _warehouseId ??= _defaultWarehouseId(warehouses);
               return DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _warehouseId,
                 decoration: const InputDecoration(labelText: 'Depósito *'),
                 items: warehouses

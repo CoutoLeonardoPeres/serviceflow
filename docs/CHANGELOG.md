@@ -1,5 +1,24 @@
 # Changelog
 
+## [Dropdowns estourando a célula do formulário] — 2026-07-28
+
+### Corrigido
+
+- **`isExpanded: true` em 22 `DropdownButtonFormField`** espalhados por 11
+  telas. Sem essa propriedade o botão se dimensiona pelo item mais largo e
+  ignora a largura da célula da grade — foi o que estourou "Adicionar
+  material" em 55px. Não era um caso isolado: qualquer dropdown com item longo
+  dentro de um `AppFormGrid` estava a um cadastro de distância do mesmo
+  estouro. Com a propriedade, o valor selecionado passa a ser truncado com
+  reticências.
+- **`AppFormFieldSpan` ganhou `columns`**, para um campo ocupar colunas
+  inteiras somando o espaçamento entre elas. `widthFactor * baseWidth` deixava
+  o campo curto pelo tamanho exato dos vãos, e o vizinho subia de linha sem
+  motivo aparente.
+- **Seletor de produto do material agora ocupa duas colunas** e tem texto de
+  apoio mais curto. Numa célula de ~168px o rótulo aparecia como
+  "Produto do est…" e o apoio, cortado no meio.
+
 ## [Encerramento da cadeia e reabertura em 30 dias] — 2026-07-28
 
 Fecha a metade de baixo do encadeamento (migration 0058). A 0056 já ligava

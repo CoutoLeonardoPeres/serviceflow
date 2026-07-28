@@ -977,6 +977,7 @@ class _AddressFormScreenState extends ConsumerState<_AddressFormScreen> {
                           enabled: !isLoading,
                         ),
                         DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: _state,
                           decoration: const InputDecoration(labelText: 'UF *'),
                           items: kBrazilianStates

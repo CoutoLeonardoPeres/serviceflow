@@ -358,6 +358,7 @@ class _TemplateFormState extends ConsumerState<_TemplateForm> {
                       (v?.trim().isEmpty ?? true) ? 'Informe um nome.' : null,
                 ),
                 DropdownButtonFormField<MessageChannel>(
+                  isExpanded: true,
                   initialValue: _channel,
                   decoration: const InputDecoration(labelText: 'Canal *'),
                   items: [

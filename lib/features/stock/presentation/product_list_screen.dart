@@ -282,6 +282,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<ProductUnit>(
+            isExpanded: true,
             initialValue: _unit,
             decoration: const InputDecoration(labelText: 'Unidade *'),
             items: ProductUnit.values
@@ -331,6 +332,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
           if (_trackStock) ...[
             const SizedBox(height: 8),
             DropdownButtonFormField<ProductTrackingType>(
+              isExpanded: true,
               initialValue: _trackingType,
               decoration: const InputDecoration(
                 labelText: 'Rastreio',

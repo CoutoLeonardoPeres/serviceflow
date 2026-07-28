@@ -217,6 +217,7 @@ class _NewCountFormState extends ConsumerState<_NewCountForm> {
             _warehouseId ??=
                 warehouses.where((w) => w.isDefault).firstOrNull?.id;
             return DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _warehouseId,
               decoration: const InputDecoration(
                 labelText: 'Depósito *',

@@ -1656,7 +1656,9 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
                   // Seletor de catálogo. Escolher um produto faz o servidor
                   // baixar o estoque e aplicar o custo médio; deixar em
                   // "Fora do catálogo" registra apenas o custo digitado.
-                  Consumer(
+                  AppFormFieldSpan(
+                    columns: 2,
+                    child: Consumer(
                     builder: (context, ref, _) {
                       final productsAsync =
                           ref.watch(stockTrackedProductsProvider);
@@ -1664,13 +1666,13 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
                         loading: () => const LinearProgressIndicator(),
                         error: (_, __) => const SizedBox.shrink(),
                         data: (products) => DropdownButtonFormField<String?>(
+                          isExpanded: true,
                           initialValue: _productId,
                           decoration: const InputDecoration(
                             labelText: 'Produto do estoque',
                             prefixIcon: Icon(Icons.inventory_outlined),
-                            helperText:
-                                'Baixa o saldo e usa o custo médio. Deixe em '
-                                '"Fora do catálogo" para item avulso.',
+                            helperText: 'Do catálogo: baixa o saldo e usa '
+                                'o custo médio.',
                           ),
                           items: [
                             const DropdownMenuItem<String?>(
@@ -1710,6 +1712,7 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
                       );
                     },
                   ),
+                  ),
                   // Depósito só aparece quando há produto e mais de um depósito
                   // — quem tem um só não precisa ver o campo (F3-P4).
                   if (_productId != null)
@@ -1722,6 +1725,7 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
                               return const SizedBox.shrink();
                             }
                             return DropdownButtonFormField<String?>(
+                              isExpanded: true,
                               initialValue: _warehouseId,
                               decoration: const InputDecoration(
                                 labelText: 'Depósito da baixa',

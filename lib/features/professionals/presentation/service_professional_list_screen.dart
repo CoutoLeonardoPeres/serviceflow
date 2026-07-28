@@ -113,6 +113,7 @@ class _ServiceProfessionalListScreenState
                         onChanged: (_) => setState(() {}),
                       ),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _kindFilter,
                         decoration: const InputDecoration(
                           labelText: 'Tipo',
@@ -129,6 +130,7 @@ class _ServiceProfessionalListScreenState
                             setState(() => _kindFilter = value ?? 'Todos'),
                       ),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _statusFilter,
                         decoration: const InputDecoration(
                           labelText: 'Status',
@@ -509,6 +511,7 @@ class _ServiceProfessionalFormState
                   AppFormGrid(
                     children: [
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _kind,
                         decoration: const InputDecoration(
                           labelText: 'Tipo',
@@ -1015,6 +1018,7 @@ class _AvailabilityPeriodField extends StatelessWidget {
           ],
         ),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: period.start,
           decoration: const InputDecoration(labelText: 'Início'),
           items: times
@@ -1026,6 +1030,7 @@ class _AvailabilityPeriodField extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: period.end,
           decoration: const InputDecoration(labelText: 'Fim'),
           items: times

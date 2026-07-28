@@ -173,6 +173,7 @@ class _AppointmentFormScreenState extends ConsumerState<AppointmentFormScreen> {
                       loading: () => const LinearProgressIndicator(),
                       error: (_, __) => const Text('Chamados indisponíveis.'),
                       data: (items) => DropdownButtonFormField<ServiceRequest>(
+                        isExpanded: true,
                         initialValue: _selectedRequest,
                         decoration: const InputDecoration(labelText: 'Chamado'),
                         items: items

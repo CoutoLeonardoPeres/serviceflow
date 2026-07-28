@@ -90,13 +90,22 @@ class AppFormGrid extends StatelessWidget {
           spacing: spacing,
           runSpacing: runSpacing,
           children: children.map((child) {
-            var factor = 1.0;
+            var width = baseWidth;
             var actual = child;
             if (child is AppFormFieldSpan) {
-              factor = child.widthFactor;
               actual = child.child;
+              final span = child.columns;
+              if (span != null) {
+                // Colunas inteiras precisam somar o espaçamento que ficaria
+                // entre elas; `baseWidth * n` sozinho deixa o campo estreito
+                // demais e o vizinho sobe de linha sem motivo.
+                final n = span.clamp(1, columns);
+                width = baseWidth * n + spacing * (n - 1);
+              } else {
+                width = baseWidth * child.widthFactor;
+              }
             }
-            return SizedBox(width: baseWidth * factor, child: actual);
+            return SizedBox(width: width, child: actual);
           }).toList(),
         );
       },
@@ -105,17 +114,23 @@ class AppFormGrid extends StatelessWidget {
 }
 
 /// Marca um campo do [AppFormGrid] para ocupar uma largura diferente da
-/// padrão da coluna. [widthFactor] 1.3 = 30% mais largo que os outros
-/// campos da mesma grade.
+/// padrão da coluna.
+///
+/// [columns] ocupa esse número de colunas inteiras, somando o espaçamento
+/// entre elas — use quando o campo precisa caber um rótulo ou um valor longo.
+/// [widthFactor] é o ajuste fino proporcional (1.3 = 30% mais largo); quando
+/// [columns] é informado, ele vence.
 class AppFormFieldSpan extends StatelessWidget {
   const AppFormFieldSpan({
     super.key,
     required this.child,
     this.widthFactor = 1.0,
+    this.columns,
   });
 
   final Widget child;
   final double widthFactor;
+  final int? columns;
 
   @override
   Widget build(BuildContext context) => child;

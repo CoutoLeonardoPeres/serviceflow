@@ -217,6 +217,7 @@ class _TransferFormState extends ConsumerState<_TransferForm> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: _fromId,
                     decoration: const InputDecoration(
                       labelText: 'Origem *',
@@ -237,6 +238,7 @@ class _TransferFormState extends ConsumerState<_TransferForm> {
                 ),
                 Expanded(
                   child: DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: _toId,
                     decoration: const InputDecoration(
                       labelText: 'Destino *',

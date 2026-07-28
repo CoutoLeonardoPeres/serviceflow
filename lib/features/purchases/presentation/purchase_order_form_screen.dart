@@ -120,6 +120,7 @@ class _PurchaseOrderFormScreenState
                     error: (_, __) =>
                         const Text('Erro ao carregar fornecedores.'),
                     data: (suppliers) => DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _supplierId,
                       decoration:
                           const InputDecoration(labelText: 'Fornecedor *'),
@@ -144,6 +145,7 @@ class _PurchaseOrderFormScreenState
                           .firstOrNull
                           ?.id;
                       return DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _warehouseId,
                         decoration: const InputDecoration(
                           labelText: 'Depósito de entrada *',

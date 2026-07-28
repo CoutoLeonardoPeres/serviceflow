@@ -830,6 +830,7 @@ class _InviteMemberDialogState extends ConsumerState<_InviteMemberDialog> {
                         validator: validateEmail,
                       ),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _roleKey,
                         decoration: const InputDecoration(labelText: 'Papel'),
                         items: roles
@@ -1310,6 +1311,7 @@ class _PeriodEditor extends StatelessWidget {
           ],
         ),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: period.start,
           decoration: const InputDecoration(labelText: 'Início'),
           items: times
@@ -1321,6 +1323,7 @@ class _PeriodEditor extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: period.end,
           decoration: const InputDecoration(labelText: 'Fim'),
           items: times
