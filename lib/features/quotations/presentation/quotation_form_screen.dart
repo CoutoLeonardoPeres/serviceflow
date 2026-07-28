@@ -11,6 +11,12 @@ import '../../../core/widgets/photo_attachment_picker.dart';
 import '../../customers/application/customer_list_notifier.dart';
 import '../../customers/data/customer_repository.dart';
 import '../../customers/domain/customer.dart';
+import '../../customers/domain/customer_search.dart';
+import '../../customers/presentation/widgets/customer_search_field.dart';
+import '../../professionals/application/service_professional_list_notifier.dart';
+import '../../professionals/domain/service_professional.dart';
+import '../../scheduling/data/appointment_repository.dart';
+import '../../scheduling/domain/appointment.dart';
 import '../../service_requests/application/service_request_list_notifier.dart';
 import '../../service_requests/data/service_request_repository.dart';
 import '../../service_requests/domain/service_request.dart';
@@ -34,6 +40,29 @@ final _quoteRequestsProvider =
   return result.items.where((request) => !request.status.isTerminal).toList();
 });
 
+/// Profissionais ativos, para a coluna "Profissional" das linhas.
+final _quoteProfessionalsProvider =
+    FutureProvider.autoDispose<List<ServiceProfessional>>((ref) async {
+  final result = await ref.read(serviceProfessionalRepositoryProvider).list();
+  return result.where((professional) => professional.isActive).toList();
+});
+
+/// Nome de quem atendeu o chamado — vira o valor inicial da coluna
+/// profissional, e continua editável linha a linha.
+final _requestTechnicianProvider =
+    FutureProvider.autoDispose.family<String?, String>((ref, requestId) async {
+  final appointments = await ref.read(appointmentRepositoryProvider).list(
+        filter: AppointmentFilter(serviceRequestId: requestId),
+      );
+  for (final appointment in appointments) {
+    if (appointment.status == AppointmentStatus.cancelled) continue;
+    if (appointment.technicians.isNotEmpty) {
+      return appointment.technicians.first.name;
+    }
+  }
+  return null;
+});
+
 class QuotationFormScreen extends ConsumerStatefulWidget {
   const QuotationFormScreen({
     super.key,
@@ -54,12 +83,8 @@ class QuotationFormScreen extends ConsumerStatefulWidget {
 
 class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _professionalCtrl = TextEditingController();
-  final _descriptionCtrl = TextEditingController();
-  final _quantityCtrl = TextEditingController(text: '1');
-  final _priceCtrl = TextEditingController();
-  final _costCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  final List<_QuoteLine> _lines = [_QuoteLine()];
   Customer? _customer;
   ServiceRequest? _request;
   bool _initialRequestApplied = false;
@@ -94,21 +119,52 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       });
     });
   }
-  QuotationItemKind _kind = QuotationItemKind.service;
   DateTime _validUntil = DateTime.now().add(const Duration(days: 15));
-  final List<QuotationDraftItem> _items = [];
   List<SelectedPhotoAttachment> _attachments = const [];
   bool _isUploadingAttachments = false;
 
   @override
   void dispose() {
-    _professionalCtrl.dispose();
-    _descriptionCtrl.dispose();
-    _quantityCtrl.dispose();
-    _priceCtrl.dispose();
-    _costCtrl.dispose();
+    for (final line in _lines) {
+      line.dispose();
+    }
     _notesCtrl.dispose();
     super.dispose();
+  }
+
+  /// Linhas preenchidas viram itens do orçamento. Linha em branco é ignorada:
+  /// a grade começa com uma vazia e sempre sobra a última em edição.
+  List<QuotationDraftItem> get _draftItems =>
+      _lines.where((line) => line.isFilled).map((line) => line.toItem()).toList();
+
+  int get _draftTotalCents =>
+      _draftItems.fold<int>(0, (sum, item) => sum + item.totalCents);
+
+  void _addLine() => setState(() => _lines.add(_QuoteLine()));
+
+  void _removeLine(int index) {
+    setState(() {
+      _lines.removeAt(index).dispose();
+      if (_lines.isEmpty) _lines.add(_QuoteLine());
+    });
+  }
+
+  /// Preenche o profissional das linhas ainda em branco com quem atendeu o
+  /// chamado. Não sobrescreve o que o usuário já escolheu.
+  void _applyRequestTechnician(String? name) {
+    if (name == null || name.isEmpty) return;
+    var changed = false;
+    for (final line in _lines) {
+      if (line.professional == null) {
+        line.professional = name;
+        changed = true;
+      }
+    }
+    if (changed && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   Future<void> _pickValidUntil() async {
@@ -126,7 +182,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     final customer = _customer;
     if (customer == null) return;
-    if (_items.isEmpty) {
+    if (_draftItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Adicione ao menos uma linha no orçamento.')),
@@ -139,7 +195,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           requestId: _request?.id,
           validUntil: _validUntil,
           notes: _notesCtrl.text,
-          items: _items,
+          items: _draftItems,
         );
 
     final state = ref.read(quotationFormProvider);
@@ -168,54 +224,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     }
   }
 
-  void _addDraftItem() {
-    final description = _descriptionCtrl.text.trim();
-    final professional = _professionalCtrl.text.trim();
-    final quantity = num.tryParse(_quantityCtrl.text.replaceAll(',', '.'));
-    final price = _moneyToCents(_priceCtrl.text);
-    final cost = _moneyToCents(_costCtrl.text);
-
-    if (description.length < 3 ||
-        quantity == null ||
-        quantity <= 0 ||
-        price <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Preencha a linha com descrição, quantidade e valor válidos.')),
-      );
-      return;
-    }
-
-    final fullDescription =
-        professional.isEmpty ? description : '$professional - $description';
-
-    setState(() {
-      _items.add(
-        QuotationDraftItem(
-          kind: _kind,
-          description: fullDescription,
-          quantity: quantity,
-          unitPriceCents: price,
-          unitCostCents: cost,
-        ),
-      );
-      _professionalCtrl.clear();
-      _descriptionCtrl.clear();
-      _quantityCtrl.text = '1';
-      _priceCtrl.clear();
-      _costCtrl.clear();
-      _kind = QuotationItemKind.service;
-    });
-  }
-
-  int get _draftTotalCents =>
-      _items.fold<int>(0, (sum, item) => sum + item.totalCents);
-
   @override
   Widget build(BuildContext context) {
     final customers = ref.watch(_quoteCustomersProvider);
     final requests = ref.watch(_quoteRequestsProvider);
+    final professionals = ref.watch(_quoteProfessionalsProvider);
     final formState = ref.watch(quotationFormProvider);
     final isLoading =
         formState is QuotationFormLoading || _isUploadingAttachments;
@@ -236,54 +249,52 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             icon: Icons.request_quote_outlined,
             child: AppFormGrid(
               children: [
-                customers.when(
-                  loading: () => const LinearProgressIndicator(),
-                  error: (_, __) => const Text('Clientes indisponíveis.'),
-                  data: (items) => DropdownButtonFormField<Customer>(
-                    initialValue: _customer,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Cliente'),
-                    items: items
-                        .map(
-                          (customer) => DropdownMenuItem(
-                            value: customer,
-                            child: Text(customer.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: isLoading
-                        ? null
-                        : (value) => setState(() => _customer = value),
-                    validator: (value) =>
-                        value == null ? 'Selecione um cliente.' : null,
+                AppFormFieldSpan(
+                  widthFactor: 2,
+                  child: customers.when(
+                    loading: () => const LinearProgressIndicator(),
+                    error: (_, __) => const Text('Clientes indisponíveis.'),
+                    data: (items) => CustomerSearchField(
+                      customers: items,
+                      selected: _customer,
+                      enabled: !isLoading,
+                      onChanged: (value) => setState(() => _customer = value),
+                      validator: (value) =>
+                          value == null ? 'Selecione um cliente.' : null,
+                    ),
                   ),
                 ),
-                requests.when(
-                  loading: () => const LinearProgressIndicator(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (items) {
-                    _applyInitialRequest(items);
-                    return DropdownButtonFormField<ServiceRequest>(
-                      initialValue: _request,
-                      isExpanded: true,
-                      decoration:
-                          const InputDecoration(labelText: 'Chamado opcional'),
-                      items: items
-                          .map(
-                            (request) => DropdownMenuItem(
-                              value: request,
-                              child: Text(
-                                '${request.displayNumber} · ${request.title}',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: isLoading
-                          ? null
-                          : (value) => setState(() => _request = value),
-                    );
-                  },
+                AppFormFieldSpan(
+                  widthFactor: 2,
+                  child: requests.when(
+                    loading: () => const LinearProgressIndicator(),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (items) {
+                      _applyInitialRequest(items);
+                      return _RequestSearchField(
+                        requests: items,
+                        selected: _request,
+                        enabled: !isLoading,
+                        onChanged: (value) => setState(() {
+                          _request = value;
+                          // Trocar o chamado troca o cliente junto: orçamento
+                          // de um chamado é sempre do cliente dele.
+                          if (value != null) {
+                            _customer = customers.maybeWhen(
+                                  data: (list) => list
+                                      .cast<Customer?>()
+                                      .firstWhere(
+                                        (item) => item?.id == value.customerId,
+                                        orElse: () => null,
+                                      ),
+                                  orElse: () => null,
+                                ) ??
+                                _customer;
+                          }
+                        }),
+                      );
+                    },
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: isLoading ? null : _pickValidUntil,
@@ -300,103 +311,36 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AppFormGrid(
-                  children: [
-                    DropdownButtonFormField<QuotationItemKind>(
-                      initialValue: _kind,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Tipo'),
-                      items: QuotationItemKind.values
-                          .map(
-                            (kind) => DropdownMenuItem(
-                              value: kind,
-                              child: Text(kind.label),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: isLoading
-                          ? null
-                          : (value) => setState(
-                                () =>
-                                    _kind = value ?? QuotationItemKind.service,
-                              ),
-                    ),
-                    TextFormField(
-                      controller: _professionalCtrl,
+                professionals.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (_, __) => const Text('Profissionais indisponíveis.'),
+                  data: (people) {
+                    // Quem atendeu o chamado entra como valor inicial das
+                    // linhas em branco, e segue trocável linha a linha.
+                    final request = _request;
+                    if (request != null) {
+                      ref
+                          .watch(_requestTechnicianProvider(request.id))
+                          .whenData(_applyRequestTechnician);
+                    }
+                    return _LinesSpreadsheet(
+                      lines: _lines,
+                      professionals: people,
                       enabled: !isLoading,
-                      decoration: const InputDecoration(
-                        labelText: 'Profissional / especialidade',
-                      ),
-                    ),
-                    TextFormField(
-                      controller: _descriptionCtrl,
-                      enabled: !isLoading,
-                      decoration: const InputDecoration(
-                          labelText: 'Descrição da linha'),
-                    ),
-                    TextFormField(
-                      controller: _quantityCtrl,
-                      enabled: !isLoading,
-                      decoration:
-                          const InputDecoration(labelText: 'Quantidade'),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
-                      ],
-                    ),
-                    TextFormField(
-                      controller: _priceCtrl,
-                      enabled: !isLoading,
-                      decoration: const InputDecoration(labelText: 'Preço R\$'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    TextFormField(
-                      controller: _costCtrl,
-                      enabled: !isLoading,
-                      decoration: const InputDecoration(labelText: 'Custo R\$'),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ],
+                      onChanged: () => setState(() {}),
+                      onRemove: _removeLine,
+                    );
+                  },
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    onPressed: isLoading ? null : _addDraftItem,
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: isLoading ? null : _addLine,
                     icon: const Icon(Icons.add),
                     label: const Text('Adicionar linha'),
                   ),
                 ),
-                const SizedBox(height: 14),
-                if (_items.isEmpty)
-                  const Text('Nenhuma linha adicionada ainda.')
-                else
-                  Column(
-                    children: _items
-                        .asMap()
-                        .entries
-                        .map(
-                          (entry) => Card(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            child: ListTile(
-                              title: Text(entry.value.description),
-                              subtitle: Text(
-                                '${entry.value.kind.label} · Qtd ${entry.value.quantity} · Venda ${_formatMoney(entry.value.unitPriceCents)} · Custo ${_formatMoney(entry.value.unitCostCents)}',
-                              ),
-                              trailing: IconButton(
-                                tooltip: 'Remover linha',
-                                onPressed: isLoading
-                                    ? null
-                                    : () => setState(() {
-                                          _items.removeAt(entry.key);
-                                        }),
-                                icon: const Icon(Icons.delete_outline),
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
                 const SizedBox(height: 10),
                 Text(
                   'Total previsto do orçamento: ${_formatMoney(_draftTotalCents)}',
@@ -466,6 +410,402 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         mimeType: attachment.mimeType,
       );
     }
+  }
+}
+
+/// Uma linha da planilha. Guarda os próprios controllers para permitir edição
+/// in-place — antes as linhas eram somente-leitura depois de adicionadas.
+class _QuoteLine {
+  _QuoteLine();
+
+  final descriptionCtrl = TextEditingController();
+  final quantityCtrl = TextEditingController(text: '1');
+  final priceCtrl = TextEditingController();
+  final costCtrl = TextEditingController();
+  QuotationItemKind kind = QuotationItemKind.service;
+  String? professional;
+
+  bool get isFilled =>
+      descriptionCtrl.text.trim().length >= 3 &&
+      (num.tryParse(quantityCtrl.text.replaceAll(',', '.')) ?? 0) > 0 &&
+      _moneyToCents(priceCtrl.text) > 0;
+
+  num get quantity => num.tryParse(quantityCtrl.text.replaceAll(',', '.')) ?? 0;
+  int get unitPriceCents => _moneyToCents(priceCtrl.text);
+  int get unitCostCents => _moneyToCents(costCtrl.text);
+  int get totalCents => (unitPriceCents * quantity).round();
+
+  QuotationDraftItem toItem() {
+    final description = descriptionCtrl.text.trim();
+    final who = professional?.trim() ?? '';
+    return QuotationDraftItem(
+      kind: kind,
+      // O profissional vira prefixo da descrição: o item de orçamento não tem
+      // coluna própria para ele no banco.
+      description: who.isEmpty ? description : '$who - $description',
+      quantity: quantity,
+      unitPriceCents: unitPriceCents,
+      unitCostCents: unitCostCents,
+    );
+  }
+
+  void dispose() {
+    descriptionCtrl.dispose();
+    quantityCtrl.dispose();
+    priceCtrl.dispose();
+    costCtrl.dispose();
+  }
+}
+
+/// Grade editável no estilo planilha: cabeçalho fixo, uma linha por item,
+/// rolagem horizontal quando a tela é estreita.
+class _LinesSpreadsheet extends StatelessWidget {
+  const _LinesSpreadsheet({
+    required this.lines,
+    required this.professionals,
+    required this.enabled,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final List<_QuoteLine> lines;
+  final List<ServiceProfessional> professionals;
+  final bool enabled;
+  final VoidCallback onChanged;
+  final ValueChanged<int> onRemove;
+
+  static const _wKind = 130.0;
+  static const _wProfessional = 190.0;
+  static const _wDescription = 280.0;
+  static const _wQuantity = 90.0;
+  static const _wMoney = 120.0;
+  static const _wTotal = 130.0;
+  static const _wAction = 48.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final headerStyle = theme.textTheme.labelMedium?.copyWith(
+      fontWeight: FontWeight.w800,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: _wKind +
+              _wProfessional +
+              _wDescription +
+              _wQuantity +
+              _wMoney * 2 +
+              _wTotal +
+              _wAction,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(width: _wKind, child: Text('Tipo', style: headerStyle)),
+                  SizedBox(
+                    width: _wProfessional,
+                    child: Text('Profissional', style: headerStyle),
+                  ),
+                  SizedBox(
+                    width: _wDescription,
+                    child: Text('Descrição', style: headerStyle),
+                  ),
+                  SizedBox(
+                    width: _wQuantity,
+                    child: Text('Qtd', style: headerStyle),
+                  ),
+                  SizedBox(
+                    width: _wMoney,
+                    child: Text('Preço R\$', style: headerStyle),
+                  ),
+                  SizedBox(
+                    width: _wMoney,
+                    child: Text('Custo R\$', style: headerStyle),
+                  ),
+                  SizedBox(
+                    width: _wTotal,
+                    child: Text('Total', style: headerStyle),
+                  ),
+                  const SizedBox(width: _wAction),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...lines.asMap().entries.map((entry) {
+              final index = entry.key;
+              final line = entry.value;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: _wKind,
+                      child: DropdownButtonFormField<QuotationItemKind>(
+                        initialValue: line.kind,
+                        isExpanded: true,
+                        isDense: true,
+                        decoration: _cellDecoration,
+                        items: QuotationItemKind.values
+                            .map(
+                              (kind) => DropdownMenuItem(
+                                value: kind,
+                                child: Text(
+                                  kind.label,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: enabled
+                            ? (value) {
+                                line.kind = value ?? QuotationItemKind.service;
+                                onChanged();
+                              }
+                            : null,
+                      ),
+                    ),
+                    SizedBox(
+                      width: _wProfessional,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _professionalValue(line),
+                        isExpanded: true,
+                        isDense: true,
+                        decoration: _cellDecoration,
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('—'),
+                          ),
+                          ..._professionalNames.map(
+                            (name) => DropdownMenuItem(
+                              value: name,
+                              child: Text(
+                                name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: enabled
+                            ? (value) {
+                                line.professional = value;
+                                onChanged();
+                              }
+                            : null,
+                      ),
+                    ),
+                    SizedBox(
+                      width: _wDescription,
+                      child: TextField(
+                        controller: line.descriptionCtrl,
+                        enabled: enabled,
+                        decoration: _cellDecoration,
+                        onChanged: (_) => onChanged(),
+                      ),
+                    ),
+                    SizedBox(
+                      width: _wQuantity,
+                      child: TextField(
+                        controller: line.quantityCtrl,
+                        enabled: enabled,
+                        textAlign: TextAlign.right,
+                        decoration: _cellDecoration,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+                        ],
+                        onChanged: (_) => onChanged(),
+                      ),
+                    ),
+                    SizedBox(
+                      width: _wMoney,
+                      child: TextField(
+                        controller: line.priceCtrl,
+                        enabled: enabled,
+                        textAlign: TextAlign.right,
+                        decoration: _cellDecoration,
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => onChanged(),
+                      ),
+                    ),
+                    SizedBox(
+                      width: _wMoney,
+                      child: TextField(
+                        controller: line.costCtrl,
+                        enabled: enabled,
+                        textAlign: TextAlign.right,
+                        decoration: _cellDecoration,
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => onChanged(),
+                      ),
+                    ),
+                    SizedBox(
+                      width: _wTotal,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          _formatMoney(line.totalCents),
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: _wAction,
+                      child: IconButton(
+                        tooltip: 'Remover linha',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: enabled ? () => onRemove(index) : null,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<String> get _professionalNames {
+    final names = professionals.map((p) => p.name).toSet().toList()..sort();
+    return names;
+  }
+
+  /// Um profissional que saiu do cadastro ainda precisa aparecer na linha que
+  /// já o referencia, senão o dropdown estoura por valor fora da lista.
+  String? _professionalValue(_QuoteLine line) {
+    final current = line.professional;
+    if (current == null || _professionalNames.contains(current)) return current;
+    return null;
+  }
+
+  static const _cellDecoration = InputDecoration(
+    isDense: true,
+    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+    border: OutlineInputBorder(),
+  );
+}
+
+/// Busca de chamado por número, título ou cliente. Lista os não encerrados.
+class _RequestSearchField extends StatelessWidget {
+  const _RequestSearchField({
+    required this.requests,
+    required this.selected,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final List<ServiceRequest> requests;
+  final ServiceRequest? selected;
+  final ValueChanged<ServiceRequest?> onChanged;
+  final bool enabled;
+
+  String _label(ServiceRequest request) =>
+      '${request.displayNumber} · ${request.title}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<ServiceRequest>(
+      displayStringForOption: _label,
+      initialValue: TextEditingValue(
+        text: selected == null ? '' : _label(selected!),
+      ),
+      optionsBuilder: (value) {
+        final query = normalizeSearchText(value.text);
+        if (query.isEmpty) return requests.take(12);
+        return requests.where((request) {
+          final haystack = normalizeSearchText(
+            '${request.displayNumber} ${request.title} '
+            '${request.customerName ?? ''}',
+          );
+          return haystack.contains(query);
+        }).take(12);
+      },
+      onSelected: enabled ? onChanged : null,
+      fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: enabled,
+          decoration: InputDecoration(
+            labelText: 'Chamado (opcional)',
+            hintText: 'Buscar por número, título ou cliente',
+            suffixIcon: controller.text.isEmpty
+                ? const Icon(Icons.search_outlined)
+                : IconButton(
+                    tooltip: 'Limpar',
+                    icon: const Icon(Icons.close),
+                    onPressed: enabled
+                        ? () {
+                            controller.clear();
+                            onChanged(null);
+                          }
+                        : null,
+                  ),
+          ),
+          onChanged: (_) {
+            if (selected != null) onChanged(null);
+          },
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        final theme = Theme.of(context);
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 12,
+            borderRadius: BorderRadius.circular(20),
+            color: theme.colorScheme.surface,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320, maxWidth: 460),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shrinkWrap: true,
+                itemCount: options.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final request = options.elementAt(index);
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.support_agent_outlined),
+                    title: Text(
+                      _label(request),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      '${request.customerName ?? 'Cliente não informado'}'
+                      ' · ${request.status.label}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => onSelected(request),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
