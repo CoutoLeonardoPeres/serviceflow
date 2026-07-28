@@ -1,5 +1,30 @@
 # Changelog
 
+## [F7-P3 — Melhor preço dentro do orçamento e da OS] — 2026-07-28
+
+Última fase do módulo de materiais. Sem migration: usa a `best_price_for_product`
+da 0059.
+
+### Adicionado
+
+- **Comparador de fornecedores** ao lado do material, no orçamento e na OS:
+  busca no catálogo, mostra o ranking do mais barato ao mais caro com o
+  repasse ao cliente já calculado, o prazo de entrega e o selo "melhor opção".
+- **Saldo próprio aparece primeiro**, com o custo médio do depósito e a mesma
+  margem do produto. Material que já está na prateleira sai na hora, sem
+  compra e sem prazo — enterrá-lo abaixo dos fornecedores esconderia a opção
+  mais barata que existe.
+- Escolher **preenche custo e preço, sem travar os campos**: negociação de
+  última hora existe, e o sistema não pode ser o motivo de a proposta não sair.
+- Tabela vencida continua na lista, mas nunca recebe o selo de melhor opção.
+
+### Notas
+
+- O comparador é um widget só, usado pelas duas telas. Duplicá-lo garantiria
+  que uma das duas ficaria desatualizada na primeira mudança de regra.
+- Sem fornecedor cadastrado e sem saldo, a tela diz o que fazer (cadastrar
+  preço ou importar a tabela) em vez de mostrar lista vazia.
+
 ## [F7-P2 — Importação da tabela de preços por planilha] — 2026-07-28
 
 Segunda fase do módulo de materiais (migration 0060).

@@ -23,6 +23,7 @@ import '../../service_requests/data/service_request_repository.dart';
 import '../../service_requests/domain/service_request.dart';
 import '../application/quotation_form_notifier.dart';
 import '../application/quotation_list_notifier.dart';
+import '../../purchases/presentation/widgets/best_price_picker.dart';
 import '../domain/quotation.dart';
 
 final _quoteCustomersProvider =
@@ -220,6 +221,33 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   /// Escolher o profissional traz o valor da hora dele para a linha e, na
   /// primeira vez, lança as despesas cadastradas (transporte, refeição,
   /// deslocamento, hospedagem, outros). Tudo continua editável.
+  /// Abre o comparador de fornecedores e traz custo e preço do escolhido.
+  ///
+  /// Preenche em vez de travar: o valor continua editável, porque negociação
+  /// de última hora existe e o sistema não pode ser o motivo de a proposta
+  /// não sair.
+  Future<void> _pickMaterialSource(_QuoteLine line) async {
+    final choice = await showMaterialSourcePicker(context: context);
+    if (choice == null || !mounted) return;
+
+    setState(() {
+      line.descriptionCtrl.text = choice.productName;
+      line.costCtrl.text = (choice.unitCostCents / 100).toStringAsFixed(2);
+      line.priceCtrl.text = (choice.unitPriceCents / 100).toStringAsFixed(2);
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          choice.fromStock
+              ? 'Usando saldo próprio, ao custo médio.'
+              : 'Preço de ${choice.supplierName}.',
+        ),
+      ),
+    );
+  }
+
   void _pickProfessional(
     _QuoteLine line,
     String? professionalId,
@@ -542,6 +570,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   onChanged: () => setState(() {}),
                   onPickProfessional: (line, id) =>
                       _pickProfessional(line, id, people),
+                  onPickMaterial: _pickMaterialSource,
                   onAdd: () =>
                       _addLine(_materialLines, QuotationItemKind.material),
                   onRemove: (index) => _removeLine(
@@ -754,6 +783,7 @@ class _LinesCard extends StatelessWidget {
     required this.onAdd,
     required this.onRemove,
     required this.onPickProfessional,
+    this.onPickMaterial,
     this.helper,
   });
 
@@ -771,6 +801,7 @@ class _LinesCard extends StatelessWidget {
   final ValueChanged<int> onRemove;
   final void Function(_QuoteLine line, String? professionalId)
       onPickProfessional;
+  final void Function(_QuoteLine line)? onPickMaterial;
 
   @override
   Widget build(BuildContext context) {
@@ -793,6 +824,7 @@ class _LinesCard extends StatelessWidget {
             onChanged: onChanged,
             onRemove: onRemove,
             onPickProfessional: onPickProfessional,
+            onPickMaterial: onPickMaterial,
           ),
           const SizedBox(height: 12),
           Row(
@@ -856,6 +888,7 @@ class _LinesSpreadsheet extends StatelessWidget {
     required this.onChanged,
     required this.onRemove,
     required this.onPickProfessional,
+    this.onPickMaterial,
   });
 
   final List<_QuoteLine> lines;
@@ -863,6 +896,9 @@ class _LinesSpreadsheet extends StatelessWidget {
   /// Escolher o profissional puxa hora e despesas do cadastro dele.
   final void Function(_QuoteLine line, String? professionalId)
       onPickProfessional;
+
+  /// Abre o comparador de fornecedores. Null = card que não é de material.
+  final void Function(_QuoteLine line)? onPickMaterial;
 
   /// Tipos oferecidos nesta grade. Material não aparece no card de serviço.
   final List<QuotationItemKind> kinds;
@@ -1009,11 +1045,28 @@ class _LinesSpreadsheet extends StatelessWidget {
                       ),
                     SizedBox(
                       width: _wDescription,
-                      child: TextField(
-                        controller: line.descriptionCtrl,
-                        enabled: enabled,
-                        decoration: _cellDecoration,
-                        onChanged: (_) => onChanged(),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: line.descriptionCtrl,
+                              enabled: enabled,
+                              decoration: _cellDecoration,
+                              onChanged: (_) => onChanged(),
+                            ),
+                          ),
+                          // Só o card de materiais oferece: buscar fornecedor
+                          // para uma hora técnica não quer dizer nada.
+                          if (onPickMaterial != null)
+                            IconButton(
+                              tooltip: 'Buscar no catálogo e comparar preços',
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.travel_explore_outlined,
+                                  size: 20),
+                              onPressed:
+                                  enabled ? () => onPickMaterial!(line) : null,
+                            ),
+                        ],
                       ),
                     ),
                     SizedBox(

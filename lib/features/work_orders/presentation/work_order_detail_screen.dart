@@ -26,6 +26,7 @@ import '../../customers/application/customer_list_notifier.dart';
 import '../../stock/application/stock_notifier.dart';
 import '../../stock/domain/product.dart';
 import '../application/work_order_list_notifier.dart';
+import '../../purchases/presentation/widgets/best_price_picker.dart';
 import '../domain/work_order.dart';
 import 'widgets/work_order_status_chip.dart';
 
@@ -1358,6 +1359,28 @@ class _SatisfactionFormState extends ConsumerState<_SatisfactionForm> {
     }
   }
 
+  /// Traz custo e preço do melhor fornecedor (ou do saldo próprio) para os
+  /// campos, sem travá-los. O mesmo comparador do orçamento — duplicar o
+  /// ranking garantiria que uma das duas telas ficaria desatualizada.
+  Future<void> _pickMaterialSource() async {
+    final choice = await showMaterialSourcePicker(
+      context: context,
+      initialProductId: _productId,
+    );
+    if (choice == null || !mounted) return;
+
+    setState(() {
+      _descriptionController.text = choice.productName;
+      _unitCostController.text =
+          (choice.unitCostCents / 100).toStringAsFixed(2);
+      _unitPriceController.text =
+          (choice.unitPriceCents / 100).toStringAsFixed(2);
+      // Saldo próprio implica baixa de estoque; compra de fornecedor não
+      // mexe no saldo e fica como lançamento avulso.
+      if (choice.fromStock) _productId = choice.productId;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -1764,16 +1787,27 @@ class _MaterialFormState extends ConsumerState<_MaterialForm> {
                       validator: (value) =>
                           (value ?? '').trim().isEmpty ? 'Informe o código.' : null,
                     ),
-                  TextFormField(
-                    controller: _descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Material',
-                      prefixIcon: Icon(Icons.inventory_2_outlined),
+                  AppFormFieldSpan(
+                    columns: 2,
+                    child: TextFormField(
+                      controller: _descriptionController,
+                      decoration: InputDecoration(
+                        labelText: 'Material',
+                        prefixIcon: const Icon(Icons.inventory_2_outlined),
+                        // Comparar fornecedor aqui evita o técnico chutar o
+                        // custo em campo — e o custo errado vira margem
+                        // errada na OS.
+                        suffixIcon: IconButton(
+                          tooltip: 'Comparar preços de fornecedor',
+                          icon: const Icon(Icons.travel_explore_outlined),
+                          onPressed: _pickMaterialSource,
+                        ),
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().length < 3
+                              ? 'Informe o material.'
+                              : null,
                     ),
-                    validator: (value) =>
-                        value == null || value.trim().length < 3
-                            ? 'Informe o material.'
-                            : null,
                   ),
                   TextFormField(
                     controller: _quantityController,
