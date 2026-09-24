@@ -171,6 +171,11 @@ String? appRedirectTarget({
 
   if (isMembershipLoading) return null;
 
+  // O link de recuperação cria uma sessão temporária no Supabase. A rota de
+  // redefinição precisa permanecer aberta até que o usuário salve a nova
+  // senha, mesmo quando ele já possui uma empresa ativa.
+  if (currentPath == AppRoutes.resetPassword) return null;
+
   if (!hasTenant &&
       currentPath != AppRoutes.createTenant &&
       currentPath != AppRoutes.acceptInvitation) {

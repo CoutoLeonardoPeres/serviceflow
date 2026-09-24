@@ -72,6 +72,23 @@ void main() {
       expect(target, isNull);
     });
 
+    test('mantem redefinicao de senha aberta durante a sessao de recuperacao',
+        () {
+      final target = appRedirectTarget(
+        isAuthLoading: false,
+        isMembershipLoading: false,
+        isAuthenticated: true,
+        hasTenant: true,
+        currentPath: AppRoutes.resetPassword,
+        planFeatures: enterprisePlan.features,
+        isPlanBlocked: false,
+        requiresPlanSelection: true,
+        hasOnboardingBypass: false,
+      );
+
+      expect(target, isNull);
+    });
+
     test('mantem pesquisa publica aberta para visitante sem autenticacao', () {
       final target = appRedirectTarget(
         isAuthLoading: false,

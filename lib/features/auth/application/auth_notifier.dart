@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/error/app_error.dart';
+import '../../../core/config/env_config.dart';
+import '../../../core/router/app_router.dart';
 import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/supabase_provider.dart';
 import '../../../shared/providers/tenant_provider.dart';
@@ -127,7 +129,10 @@ class AuthNotifier extends Notifier<AuthActionState> {
   Future<void> sendPasswordReset(String email) async {
     state = const AuthActionLoading();
     try {
-      await _client.auth.resetPasswordForEmail(email.trim());
+      await _client.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo: EnvConfig.publicUrl(AppRoutes.resetPassword),
+      );
       // Mensagem genérica: não revela se o e-mail existe ou não.
       state = const AuthActionSuccess(
         'Se este e-mail estiver cadastrado, você receberá as instruções em breve.',
@@ -147,6 +152,12 @@ class AuthNotifier extends Notifier<AuthActionState> {
       await _client.auth.updateUser(
         UserAttributes(password: newPassword),
       );
+      // A sessão criada pelo link de recuperação não deve permanecer ativa.
+      // Assim, o usuário confirma o novo segredo no fluxo normal de login.
+      await _client.auth.signOut();
+      ref
+        ..invalidate(authStateProvider)
+        ..invalidate(activeMembershipProvider);
       state = const AuthActionSuccess('Senha atualizada com sucesso.');
     } on AuthException catch (e) {
       state = AuthActionError(_mapAuthException(e));
