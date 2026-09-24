@@ -18,15 +18,8 @@ class AppFormSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NeomorphicPanel(
-      borderRadius: 32,
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          AppColors.surfaceRaised,
-          AppColors.surfaceCanvas,
-        ],
-      ),
+      borderRadius: AppColors.radiusContainer,
+      color: AppColors.background,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -34,7 +27,7 @@ class AppFormSection extends StatelessWidget {
           Row(
             children: [
               NeomorphicInset(
-                borderRadius: 18,
+                borderRadius: AppColors.radiusBase,
                 padding: const EdgeInsets.all(12),
                 child: Icon(
                   icon,
