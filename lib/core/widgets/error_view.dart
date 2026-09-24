@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'neomorphic.dart';
+
 /// View de erro genérica — exibe mensagem amigável sem expor detalhes técnicos.
 class ErrorView extends StatelessWidget {
   const ErrorView({
@@ -22,7 +24,7 @@ class ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 56, color: colorScheme.error),
+            NeomorphicIconWell(icon: icon),
             const SizedBox(height: 16),
             Text(
               message,
@@ -33,10 +35,11 @@ class ErrorView extends StatelessWidget {
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 24),
-              OutlinedButton.icon(
+              NeomorphicButton(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Tentar novamente'),
+                icon: Icons.refresh_rounded,
+                label: 'Tentar novamente',
+                variant: NeomorphicButtonVariant.secondary,
               ),
             ],
           ],
@@ -76,7 +79,7 @@ class EmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 56, color: colorScheme.onSurfaceVariant),
+            NeomorphicIconWell(icon: icon),
             const SizedBox(height: 16),
             Text(
               message,

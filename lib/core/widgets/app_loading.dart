@@ -13,7 +13,7 @@ class AppLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: NeomorphicPanel(
-        borderRadius: 28,
+        borderRadius: AppColors.radiusContainer,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -21,7 +21,10 @@ class AppLoading extends StatelessWidget {
             const SizedBox(
               width: 30,
               height: 30,
-              child: CircularProgressIndicator(strokeWidth: 2.8),
+              child: CircularProgressIndicator(
+                color: AppColors.primary,
+                strokeWidth: 2.8,
+              ),
             ),
             if (message != null) ...[
               const SizedBox(height: 16),
@@ -52,15 +55,8 @@ class SplashScreen extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: NeomorphicPanel(
-              borderRadius: 34,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.surfaceRaised,
-                  AppColors.surfaceCanvas,
-                ],
-              ),
+              borderRadius: AppColors.radiusContainer,
+              color: AppColors.background,
               padding: const EdgeInsets.fromLTRB(40, 34, 40, 30),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -71,16 +67,18 @@ class SplashScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [
-                          AppColors.electricViolet,
-                          Color(0xFF54B9D9),
+                          AppColors.primary,
+                          AppColors.primaryLight,
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius:
+                          BorderRadius.circular(AppColors.radiusContainer),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.electricViolet.withValues(alpha: 0.28),
+                          color:
+                              AppColors.electricViolet.withValues(alpha: 0.28),
                           offset: const Offset(12, 16),
                           blurRadius: 28,
                         ),

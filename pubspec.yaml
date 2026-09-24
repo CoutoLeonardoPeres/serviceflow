@@ -36,6 +36,7 @@ dependencies:
 
   # Interface
   cupertino_icons: ^1.0.6
+  google_fonts: ^8.1.0
   pdf: ^3.12.0
   printing: ^5.14.3
   file_picker: ^8.3.7

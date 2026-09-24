@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 class AppTheme {
@@ -6,73 +7,78 @@ class AppTheme {
 
   // ── Tema claro ──────────────────────────────────────────────────────────────
   static ThemeData get light {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.seed,
-      brightness: Brightness.light,
-      surface: AppColors.surfaceBase,
+    const colorScheme = ColorScheme.light(
+      primary: AppColors.primary,
+      onPrimary: Colors.white,
+      secondary: AppColors.success,
+      onSecondary: Colors.white,
+      surface: AppColors.background,
+      onSurface: AppColors.foreground,
     );
     return _build(colorScheme);
   }
 
   // ── Tema escuro (preparado, não ativado no MVP) ──────────────────────────
   static ThemeData get dark {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.seed,
-      brightness: Brightness.dark,
+    const colorScheme = ColorScheme.dark(
+      primary: AppColors.primary,
+      secondary: AppColors.success,
     );
     return _build(colorScheme);
   }
 
   static ThemeData _build(ColorScheme colorScheme) {
-    final textTheme = Typography.blackMountainView.copyWith(
-      displayLarge: const TextStyle(
+    final displayFont = GoogleFonts.plusJakartaSansTextTheme();
+    final bodyFont = GoogleFonts.dmSansTextTheme();
+    final textTheme = bodyFont.copyWith(
+      displayLarge: displayFont.displayLarge!.copyWith(
         color: AppColors.ink,
         fontSize: 52,
         fontWeight: FontWeight.w800,
         letterSpacing: 0,
       ),
-      displayMedium: const TextStyle(
+      displayMedium: displayFont.displayMedium!.copyWith(
         color: AppColors.ink,
         fontSize: 42,
         fontWeight: FontWeight.w800,
         letterSpacing: 0,
       ),
-      headlineMedium: const TextStyle(
+      headlineMedium: displayFont.headlineMedium!.copyWith(
         color: AppColors.ink,
         fontSize: 34,
         fontWeight: FontWeight.w800,
       ),
-      headlineSmall: const TextStyle(
+      headlineSmall: displayFont.headlineSmall!.copyWith(
         color: AppColors.ink,
         fontSize: 28,
         fontWeight: FontWeight.w800,
       ),
-      titleLarge: const TextStyle(
+      titleLarge: displayFont.titleLarge!.copyWith(
         color: AppColors.ink,
         fontSize: 24,
         fontWeight: FontWeight.w700,
       ),
-      titleMedium: const TextStyle(
+      titleMedium: displayFont.titleMedium!.copyWith(
         color: AppColors.ink,
         fontSize: 18,
         fontWeight: FontWeight.w700,
       ),
-      bodyLarge: const TextStyle(
+      bodyLarge: bodyFont.bodyLarge!.copyWith(
         color: AppColors.ink,
         fontSize: 16,
         fontWeight: FontWeight.w500,
       ),
-      bodyMedium: const TextStyle(
+      bodyMedium: bodyFont.bodyMedium!.copyWith(
         color: AppColors.inkMuted,
         fontSize: 14,
         fontWeight: FontWeight.w500,
       ),
-      labelLarge: const TextStyle(
+      labelLarge: bodyFont.labelLarge!.copyWith(
         color: AppColors.ink,
         fontSize: 14,
         fontWeight: FontWeight.w700,
       ),
-      bodySmall: const TextStyle(
+      bodySmall: bodyFont.bodySmall!.copyWith(
         color: AppColors.inkMuted,
         fontSize: 12,
         fontWeight: FontWeight.w500,
@@ -85,19 +91,18 @@ class AppTheme {
       textTheme: textTheme,
       scaffoldBackgroundColor: AppColors.surfaceBase,
       canvasColor: AppColors.surfaceBase,
-      fontFamily: 'Inter',
       splashFactory: InkSparkle.splashFactory,
       dialogTheme: DialogThemeData(
         backgroundColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(34),
+          borderRadius: BorderRadius.circular(AppColors.radiusContainer),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: AppColors.surfaceRaised,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppColors.radiusBase),
           side: BorderSide(
             color: AppColors.borderSoft.withValues(alpha: 0.92),
           ),
@@ -112,12 +117,11 @@ class AppTheme {
         style: MenuStyle(
           backgroundColor:
               const WidgetStatePropertyAll(AppColors.surfaceRaised),
-          surfaceTintColor:
-              const WidgetStatePropertyAll(Colors.transparent),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
           elevation: const WidgetStatePropertyAll(0),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(AppColors.radiusBase),
               side: BorderSide(
                 color: AppColors.borderSoft.withValues(alpha: 0.92),
               ),
@@ -130,12 +134,11 @@ class AppTheme {
         menuStyle: MenuStyle(
           backgroundColor:
               const WidgetStatePropertyAll(AppColors.surfaceRaised),
-          surfaceTintColor:
-              const WidgetStatePropertyAll(Colors.transparent),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
           elevation: const WidgetStatePropertyAll(0),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(AppColors.radiusBase),
               side: BorderSide(
                 color: AppColors.borderSoft.withValues(alpha: 0.92),
               ),
@@ -146,13 +149,13 @@ class AppTheme {
           filled: true,
           fillColor: AppColors.surfacePressed,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppColors.radiusBase),
             borderSide: BorderSide(
               color: AppColors.borderSoft.withValues(alpha: 0.95),
             ),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppColors.radiusBase),
             borderSide: BorderSide(
               color: AppColors.borderSoft.withValues(alpha: 0.95),
             ),
@@ -165,7 +168,7 @@ class AppTheme {
           color: Colors.white,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppColors.radiusBase),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -190,7 +193,7 @@ class AppTheme {
         shadowColor: AppColors.shadowCool.withValues(alpha: 0.22),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppColors.radiusContainer),
           side: BorderSide(
             color: AppColors.borderSoft.withValues(alpha: 0.92),
             width: 1,
@@ -215,19 +218,19 @@ class AppTheme {
         prefixIconColor: AppColors.inkMuted,
         suffixIconColor: AppColors.inkMuted,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(AppColors.radiusBase),
           borderSide: BorderSide(
             color: AppColors.borderSoft.withValues(alpha: 0.95),
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(AppColors.radiusBase),
           borderSide: BorderSide(
             color: AppColors.borderSoft.withValues(alpha: 0.95),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(AppColors.radiusBase),
           borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
@@ -249,9 +252,9 @@ class AppTheme {
           foregroundColor: colorScheme.onPrimary,
           elevation: 0,
           shadowColor: colorScheme.primary.withValues(alpha: 0.34),
-          minimumSize: const Size(0, 58),
+          minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppColors.radiusBase),
           ),
           textStyle: const TextStyle(
             fontWeight: FontWeight.w800,
@@ -264,9 +267,9 @@ class AppTheme {
       // alvo de toque menor que as acoes que o tecnico nao deve tocar.
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 58),
+          minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppColors.radiusBase),
           ),
           side: BorderSide(color: colorScheme.outline),
           textStyle: const TextStyle(
@@ -281,9 +284,9 @@ class AppTheme {
           foregroundColor: colorScheme.onPrimary,
           elevation: 0,
           shadowColor: colorScheme.primary.withValues(alpha: 0.34),
-          minimumSize: const Size(double.infinity, 58),
+          minimumSize: const Size(double.infinity, 48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppColors.radiusBase),
           ),
           textStyle: const TextStyle(
             fontWeight: FontWeight.w800,
@@ -309,7 +312,7 @@ class AppTheme {
         focusElevation: 0,
         hoverElevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppColors.radiusBase),
         ),
       ),
 

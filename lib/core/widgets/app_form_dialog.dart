@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import 'neomorphic.dart';
 
 /// Diálogo de formulário com cabeçalho e botão de fechar.
@@ -22,12 +23,15 @@ Future<T?> showAppFormDialog<T>({
     context: context,
     barrierDismissible: false,
     builder: (context) => Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
+        vertical: 20,
+      ),
       backgroundColor: Colors.transparent,
       elevation: 0,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(34),
+        borderRadius: BorderRadius.circular(AppColors.radiusContainer),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: 760),
@@ -35,17 +39,10 @@ Future<T?> showAppFormDialog<T>({
           topOrb: false,
           bottomOrb: false,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(34),
+            borderRadius: BorderRadius.circular(AppColors.radiusContainer),
             child: NeomorphicPanel(
-              borderRadius: 34,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFF4F7FC),
-                  Color(0xFFEEF3F9),
-                ],
-              ),
+              borderRadius: AppColors.radiusContainer,
+              color: AppColors.background,
               padding: EdgeInsets.zero,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -79,8 +76,8 @@ Future<T?> showAppFormDialog<T>({
                   Flexible(
                     child: ClipRRect(
                       borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(34),
-                        bottomRight: Radius.circular(34),
+                        bottomLeft: Radius.circular(AppColors.radiusContainer),
+                        bottomRight: Radius.circular(AppColors.radiusContainer),
                       ),
                       child: child,
                     ),

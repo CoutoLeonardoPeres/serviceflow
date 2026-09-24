@@ -18,6 +18,14 @@ abstract class Breakpoints {
   static const desktop = 1024.0;
 }
 
+enum ShellNavigationMode { mobile, compactRail, extendedRail }
+
+ShellNavigationMode shellNavigationModeForWidth(double width) {
+  if (width < Breakpoints.mobile) return ShellNavigationMode.mobile;
+  if (width < Breakpoints.desktop) return ShellNavigationMode.compactRail;
+  return ShellNavigationMode.extendedRail;
+}
+
 /// Destino de navegação.
 class _NavDestination {
   const _NavDestination({
@@ -196,8 +204,9 @@ class ResponsiveShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final width = MediaQuery.sizeOf(context).width;
+    final mode = shellNavigationModeForWidth(width);
 
-    if (width >= Breakpoints.mobile) {
+    if (mode != ShellNavigationMode.mobile) {
       return _DesktopShell(child: child);
     }
     return _MobileShell(child: child);
@@ -231,27 +240,25 @@ class _DesktopShell extends ConsumerWidget {
     final selectedIndex = _indexForRoute(location, destinations);
     final tenant = ref.watch(currentTenantProvider);
     final user = ref.watch(currentUserProvider);
+    final mode = shellNavigationModeForWidth(MediaQuery.sizeOf(context).width);
+    final extended = mode == ShellNavigationMode.extendedRail;
 
     return Scaffold(
       body: NeomorphicBackdrop(
+        topOrb: false,
+        bottomOrb: false,
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(24),
             child: Row(
               children: [
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    minWidth:
-                        MediaQuery.sizeOf(context).width >= Breakpoints.desktop
-                            ? 280
-                            : 104,
-                    maxWidth:
-                        MediaQuery.sizeOf(context).width >= Breakpoints.desktop
-                            ? 320
-                            : 104,
+                    minWidth: extended ? 280 : 88,
+                    maxWidth: extended ? 304 : 88,
                   ),
                   child: NeomorphicPanel(
-                    borderRadius: 34,
+                    borderRadius: AppColors.radiusContainer,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
                       vertical: 10,
@@ -260,8 +267,7 @@ class _DesktopShell extends ConsumerWidget {
                       children: [
                         Expanded(
                           child: NavigationRail(
-                            extended: MediaQuery.sizeOf(context).width >=
-                                Breakpoints.desktop,
+                            extended: extended,
                             scrollable: true,
                             selectedIndex: selectedIndex,
                             onDestinationSelected: (i) =>
@@ -282,8 +288,7 @@ class _DesktopShell extends ConsumerWidget {
                                       size: 30,
                                     ),
                                   ),
-                                  if (MediaQuery.sizeOf(context).width >=
-                                      Breakpoints.desktop) ...[
+                                  if (extended) ...[
                                     const SizedBox(width: 14),
                                     Text(
                                       'ServiceFlow',
@@ -369,12 +374,14 @@ class _MobileShell extends ConsumerWidget {
 
     return Scaffold(
       body: NeomorphicBackdrop(
+        topOrb: false,
+        bottomOrb: false,
         child: child,
       ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         child: NeomorphicPanel(
-          borderRadius: 26,
+          borderRadius: AppColors.radiusContainer,
           padding: EdgeInsets.zero,
           child: NavigationBar(
             selectedIndex: selectedIndex,

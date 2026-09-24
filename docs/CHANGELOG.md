@@ -1,5 +1,30 @@
 # Changelog
 
+## [Fundação visual App Cli Manager] — 2026-09-24
+
+### Adicionado
+
+- Tokens visuais compartilhados com fundo neomórfico `#E0E5EC`, azul principal
+  `#6F68F8`, tipografia Plus Jakarta Sans para títulos e DM Sans para textos.
+- Botão neomórfico com estados de foco, hover, pressão e rótulo acessível.
+- Poço de ícone, sombras internas/externas, raios de 12/16/32 px e animação
+  padrão de 300 ms.
+- Breakpoints explícitos para navegação móvel, rail compacto e rail estendido.
+
+### Corrigido
+
+- Modais de cadastro passam a recortar o conteúdo com bordas arredondadas em
+  todas as camadas, inclusive em telas estreitas.
+- Splash, carregamento, estados vazios e estados de erro agora usam os mesmos
+  componentes visuais e a mesma cor primária.
+- Navegação desktop deixou de usar os painéis decorativos do fundo e ganhou
+  dimensões mais próximas do padrão de referência.
+
+### Validação
+
+- `flutter analyze` sem issues.
+- Suíte completa: 319 testes passando.
+
 ## [Salvar fornecedor, máscaras e proteção do proprietário] — 2026-07-28
 
 ### Corrigido
