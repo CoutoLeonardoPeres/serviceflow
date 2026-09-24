@@ -33,6 +33,10 @@ Este indice aponta os documentos que devem ser usados para entender, manter, pub
 - `docs/RELEASE_NOTES_MVP.md` — notas de release do MVP.
 - `docs/CHANGELOG.md` — historico de entregas.
 
+## Integracoes operacionais
+
+- `docs/EMAIL_SMTP_SETUP.md` — remetente de recuperacao de senha, Hostinger, Supabase e teste de aceite.
+
 ## Regra de manutencao
 
 Sempre que uma nova tela, tabela, migration, regra de negocio, permissao, script de deploy ou fluxo principal for alterado, atualize tambem:

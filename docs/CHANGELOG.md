@@ -1,5 +1,14 @@
 # Changelog
 
+## [SMTP de autenticacao documentado] — 2026-09-24
+
+### Adicionado
+
+- Manual `docs/EMAIL_SMTP_SETUP.md` com a configuracao segura do remetente
+  `suporte@cliente.leonardopescouto.com` na Hostinger e no Supabase.
+- Procedimento de URLs de recuperacao, teste de aceite, DNS e operacao sem
+  credenciais versionadas.
+
 ## [Fundação visual App Cli Manager] — 2026-09-24
 
 ### Adicionado
