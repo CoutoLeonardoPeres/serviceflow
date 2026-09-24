@@ -10,6 +10,19 @@ Ultima atualizacao: 2026-07-23
 - Chave usada no Flutter: somente `anon key`.
 - Nunca colocar `service_role key` no Flutter, no build web, no Git ou em arquivos publicos.
 
+## Owner master permanente
+
+A migration `0063_master_owner_account.sql` promove `leonardopcouto@gmail.com`
+como Owner master do ServiceFlow. Ela deve ser aplicada somente no projeto
+Supabase correto e com backup recente, pois concede acesso transversal a todas
+as empresas.
+
+O Owner master recebe `platform_admin`, `tenant_owner` em todos os tenants e
+politicas RLS globais nas tabelas que possuem `tenant_id`. A conta, suas
+associacoes e o privilegio master sao protegidos por triggers contra remocao,
+suspensao ou downgrade. A senha permanece exclusivamente no Supabase Auth e
+nunca e escrita em SQL, logs ou arquivos do projeto.
+
 ## Principios de banco
 
 O ServiceFlow e multi-tenant. Cada empresa deve enxergar somente seus proprios dados.
