@@ -137,10 +137,16 @@ class AuthNotifier extends Notifier<AuthActionState> {
       state = const AuthActionSuccess(
         'Se este e-mail estiver cadastrado, você receberá as instruções em breve.',
       );
+    } on AuthException catch (e) {
+      // Mantemos a mensagem genérica sobre a existência da conta, mas
+      // informamos limites e falhas reais para que o usuário não fique
+      // aguardando um e-mail que o provedor não conseguiu enviar.
+      state = AuthActionError(_mapAuthException(e));
     } catch (_) {
-      // Mesmo em erro interno, retornamos sucesso para não revelar se o e-mail existe.
-      state = const AuthActionSuccess(
-        'Se este e-mail estiver cadastrado, você receberá as instruções em breve.',
+      state = const AuthActionError(
+        UnexpectedError(
+          'Não foi possível enviar as instruções agora. Tente novamente mais tarde.',
+        ),
       );
     }
   }
