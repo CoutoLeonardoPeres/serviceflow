@@ -8,6 +8,7 @@ import '../../core/widgets/neomorphic.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/tenant_provider.dart';
 import '../../features/auth/application/auth_notifier.dart';
+import '../../features/platform_admin/application/platform_admin_provider.dart';
 
 /// Breakpoints de layout.
 abstract class Breakpoints {
@@ -237,6 +238,20 @@ class _DesktopShell extends ConsumerWidget {
               features.contains(destination.feature),
         )
         .toList();
+    final isPlatformAdmin = ref.watch(isPlatformAdminProvider).maybeWhen(
+          data: (value) => value,
+          orElse: () => false,
+        );
+    if (isPlatformAdmin) {
+      destinations.add(
+        const _NavDestination(
+          route: AppRoutes.platformAdmin,
+          icon: Icons.admin_panel_settings_outlined,
+          selectedIcon: Icons.admin_panel_settings,
+          label: 'Admin da plataforma',
+        ),
+      );
+    }
     final selectedIndex = _indexForRoute(location, destinations);
     final tenant = ref.watch(currentTenantProvider);
     final user = ref.watch(currentUserProvider);
@@ -370,6 +385,20 @@ class _MobileShell extends ConsumerWidget {
               features.contains(destination.feature),
         )
         .toList();
+    final isPlatformAdmin = ref.watch(isPlatformAdminProvider).maybeWhen(
+          data: (value) => value,
+          orElse: () => false,
+        );
+    if (isPlatformAdmin) {
+      destinations.add(
+        const _NavDestination(
+          route: AppRoutes.platformAdmin,
+          icon: Icons.admin_panel_settings_outlined,
+          selectedIcon: Icons.admin_panel_settings,
+          label: 'Admin da plataforma',
+        ),
+      );
+    }
     final selectedIndex = _indexForRoute(location, destinations);
 
     return Scaffold(

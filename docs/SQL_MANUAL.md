@@ -59,6 +59,7 @@ Aplicar sempre em ordem:
 | `0014_customer_satisfaction.sql` | Pesquisa de satisfacao simples vinculada a OS concluida. |
 | `0015_quotation_attachments.sql` | Fotos privadas de orcamentos para catalogo e historico. |
 | `0022_tenant_subscription_plans.sql` a `0034_tenant_billing_webhook_events.sql` | Planos SaaS, limites, unidades, membros, convites, onboarding de plano, historico comercial, sessoes de checkout rastreaveis, confirmacao comercial e infraestrutura de webhooks de cobranca. |
+| `0064_platform_admin_tenant_overview.sql` | RPC protegida para o painel master listar empresas, plano, cobrança, usuários e unidades sem abrir acesso transversal por RLS. |
 
 Rollbacks correspondentes ficam em `supabase/rollbacks/`.
 

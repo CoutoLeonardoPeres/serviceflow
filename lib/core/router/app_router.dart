@@ -56,6 +56,7 @@ import '../../features/settings/presentation/audit_log_screen.dart';
 import '../../features/settings/presentation/plan_onboarding_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/settings/presentation/subscription_gate_screen.dart';
+import '../../features/platform_admin/presentation/platform_admin_screen.dart';
 import '../../core/widgets/app_loading.dart';
 import '../../core/widgets/responsive_shell.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -138,6 +139,7 @@ abstract class AppRoutes {
   static const servicePriorities = '/configuracoes/prioridades-chamado';
   static const subscription = '/assinatura';
   static const planOnboarding = '/onboarding-plano';
+  static const platformAdmin = '/administracao-plataforma';
 }
 
 String? appRedirectTarget({
@@ -371,6 +373,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.dashboard,
             builder: (_, __) => const DashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.platformAdmin,
+            builder: (_, __) => const PlatformAdminScreen(),
           ),
 
           // ── Clientes (E3) ────────────────────────────────────────────
